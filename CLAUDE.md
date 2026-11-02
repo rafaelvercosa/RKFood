@@ -35,25 +35,24 @@
 - Testes: `npm test` (12 testes de regras de negócio no modo demo) e `supabase/tests/run_local.sh`
   (11 testes SQL: isolamento entre estabelecimentos, perfis, pedido, pagamento, fiado), todos passando num
   Postgres local.
-- **Ainda NÃO testado contra o Supabase real.** A sessão na nuvem onde isto foi feito não tinha acesso de
-  rede ao Supabase.
 - Projeto Supabase: `https://yyarqyuirwzlqhsurwmx.supabase.co`. A URL e a chave publishable ficam em
-  `.env.local` (fora do git). O Rafael precisa criar esse arquivo a partir de `.env.example`. A senha do banco
-  já foi trocada e **não deve ser pedida nem colada em conversa**.
+  `.env.local` (fora do git, já criado no computador do Rafael). A senha do banco já foi trocada e
+  **não deve ser pedida nem colada em conversa**.
+- **Banco aplicado no Supabase real (01/11/2026)** pelo MCP: as 3 migrações, o bucket `midia` e o Realtime.
+  Cadastro aberto desligado em Auth. Primeiro estabelecimento: **Espetinho do Rafael** (conta
+  `rafaelkvercosa@gmail.com`, gerente Rafael), criado com `private.bootstrap_establishment`.
+- **Testado de ponta a ponta no Supabase real**, com `npm run dev` e duas abas: conectar aparelho, PIN,
+  cardápio, pedido, cozinha em tempo real (nos dois sentidos), pagamento dividido (Pix + fiado), fiado com
+  limite e recebimento parcial, relatório do dia, histórico e upload de foto. Tudo funcionou, inclusive o
+  embed com FKs compostas, o filtro `.or(...)`, o Realtime com RLS e as políticas do Storage. O único bug
+  encontrado foi um laço nas abas da Gerência (link relativo no React Router 7), já corrigido.
+- Ficaram dados de teste no banco: pedido nº 1 (mesa 5) e o cliente "Cliente Teste" com R$ 10 de fiado.
+- Ainda não testado na nuvem: cobrança `antes`, cancelamento de pedido, extrato em PDF/WhatsApp e dois
+  aparelhos físicos diferentes.
 
 ## Próximos passos (nesta ordem)
-1. **Aplicar o banco** no Supabase: rodar `supabase/migrations/*.sql` em ordem (pelo MCP do Supabase ou
-   colando `supabase/instalar_tudo.sql` no SQL Editor). Conferir se as tabelas, as funções, o bucket `midia`
-   e a publicação Realtime foram criados.
-2. Em Auth, desligar **Allow new users to sign up**.
-3. Criar o usuário do estabelecimento em Authentication → Users (Auto Confirm) e rodar
-   `select private.bootstrap_establishment('Nome', 'email', 'Nome do dono', 'PIN');`
-4. `npm run dev` com `.env.local` e **testar de ponta a ponta no Supabase real**: conectar aparelho, PIN,
-   pedido, cozinha em tempo real (duas abas/aparelhos), pagamento, fiado, upload de foto, relatórios.
-   Pontos de atenção que nunca rodaram de verdade: o embed `orders?select=*,order_items(*),payments(*)`
-   (FKs compostas), o filtro `.or(...)` em `src/data/cloud.ts`, o Realtime com RLS e as políticas do Storage.
-5. Deploy na Vercel (`docs/implantacao.md`).
-6. Depois: o **modo contingência offline** e o servidor local na barraca (`docs/roadmap.md`), backups,
+1. Deploy na Vercel (`docs/implantacao.md`).
+2. Depois: o **modo contingência offline** e o servidor local na barraca (`docs/roadmap.md`), backups,
    painel do administrador da plataforma, ficha técnica e lista de compras, relatórios por período.
 
 ## Mapa do código
