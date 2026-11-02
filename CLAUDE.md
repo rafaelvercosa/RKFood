@@ -58,7 +58,8 @@
   real e testadas na nuvem, inclusive o cancelamento de pedido.
 - Ficaram dados de teste no banco: pedidos de 01/11 (mesa 5) e de 02/11 (mesas 8 e 9, cancelados com
   "Teste do sistema"), de 02/11 também mesa 6 (cancelada) e mesa 10 (paga como cortesia), o cliente
-  "Cliente Teste" com R$ 10 de fiado e os usuários "Gerente Teste" e "Sócio Teste" na lixeira.
+  "Cliente Teste" com R$ 10 de fiado, os usuários "Gerente Teste" e "Sócio Teste" e o material
+  "Frango (teste)" na lixeira. O Espetinho do Rafael ainda não tem materiais nem fichas técnicas reais.
 - Ainda não testado na nuvem: cobrança `antes`, extrato em PDF/WhatsApp, dois aparelhos físicos diferentes
   e a recusa de `set_order_priority` para quem não é gerente (testada só no modo demonstração).
 - **Dono, autorização e histórico** (migração 6, `20261103000300_dono_autorizacao_historico.sql`): perfil
@@ -68,12 +69,12 @@
   Histórico também de entrada/saída por PIN, PIN errado e conexão de aparelho (`log_device_event`).
   **Aplicada no Supabase real e testada na nuvem em 02/11/2026** (o Rafael virou dono); só a conexão de
   aparelho não foi testada na nuvem, porque exige sair e entrar com a senha do aparelho.
-- **Configuração do dono** (migração 7, `20261103000400_mesas_e_aparencia.sql`, ainda NÃO aplicada no
-  Supabase): `establishments.table_count` (0 a 200, padrão 10) define os botões de mesa do atendente, e o
+- **Configuração do dono** (migração 7, `20261103000400_mesas_e_aparencia.sql`, aplicada no
+  Supabase em 02/11/2026): `establishments.table_count` (0 a 200, padrão 10) define os botões de mesa do atendente, e o
   gerente ou o dono muda; nome, frase, cor, logomarca e foto só o dono muda (`save_establishment` confere).
   O app é genérico: tudo que identifica a barraca vem do cadastro do estabelecimento, nunca do código.
-- **Área do dono** (`/dono`, só perfil dono; migração 8, `20261104000100_materiais_e_ficha_tecnica.sql`, ainda
-  NÃO aplicada no Supabase): materiais (`materials`, unidade kg/l/un e custo opcional por unidade) e ficha
+- **Área do dono** (`/dono`, só perfil dono; migração 8, `20261104000100_materiais_e_ficha_tecnica.sql`,
+  aplicada no Supabase e testada na nuvem em 02/11/2026): materiais (`materials`, unidade kg/l/un e custo opcional por unidade) e ficha
   técnica (`recipe_items`, quantidade na unidade do material; a tela digita em g/ml). Relatórios em
   `src/data/reports.ts` (puro): vendas por período, consumo, custo, lucro estimado e lista de compras =
   repor o que foi consumido (sem saldo de estoque, por decisão do Rafael). No modo nuvem os pedidos do
