@@ -57,7 +57,8 @@
   (`orders.priority_at`/`priority_reason`, RPC `set_order_priority`). Migrações 4 e 5 aplicadas no Supabase
   real e testadas na nuvem, inclusive o cancelamento de pedido.
 - Ficaram dados de teste no banco: pedidos de 01/11 (mesa 5) e de 02/11 (mesas 8 e 9, cancelados com
-  "Teste do sistema") e o cliente "Cliente Teste" com R$ 10 de fiado.
+  "Teste do sistema"), de 02/11 também mesa 6 (cancelada) e mesa 10 (paga como cortesia), o cliente
+  "Cliente Teste" com R$ 10 de fiado e os usuários "Gerente Teste" e "Sócio Teste" na lixeira.
 - Ainda não testado na nuvem: cobrança `antes`, extrato em PDF/WhatsApp, dois aparelhos físicos diferentes
   e a recusa de `set_order_priority` para quem não é gerente (testada só no modo demonstração).
 - **Dono, autorização e histórico** (migração 6, `20261103000300_dono_autorizacao_historico.sql`): perfil
@@ -65,6 +66,8 @@
   `cancel_order` exige PIN de gerente e `pay_order` com `cortesia` exige PIN do dono (`private.authorize`);
   a recusa fica no `audit_log`, por isso essas funções devolvem a mensagem como texto em vez de lançar erro.
   Histórico também de entrada/saída por PIN, PIN errado e conexão de aparelho (`log_device_event`).
+  **Aplicada no Supabase real e testada na nuvem em 02/11/2026** (o Rafael virou dono); só a conexão de
+  aparelho não foi testada na nuvem, porque exige sair e entrar com a senha do aparelho.
 - **Testes do banco no Windows sem Docker:** dá para rodar `supabase/tests` num Postgres em memória com o
   PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 16 testes passando.
 
