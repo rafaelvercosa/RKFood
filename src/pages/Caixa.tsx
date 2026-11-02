@@ -49,9 +49,9 @@ function OrderList({ paid }: { paid: boolean }) {
       {orders.length === 0 && <div className="card empty">{paid ? 'Nenhum pedido pago hoje.' : 'Nenhum pedido aguardando pagamento. 👍'}</div>}
       <div className="stack">
         {orders.map((o) => (
-          <button key={o.id} className="card" style={{ display: 'block', textAlign: 'left', fontWeight: 400 }} onClick={() => setSelected(o.id)}>
+          <button key={o.id} className={`card comanda ${o.status}`} style={{ display: 'block', textAlign: 'left', fontWeight: 400 }} onClick={() => setSelected(o.id)}>
             <div className="row between">
-              <strong>nº {o.number} · {identLabel(o)}</strong>
+              <div className="row"><span className="num">nº {o.number}</span><strong>{identLabel(o)}</strong></div>
               <span className="money"><b>{brl(paid ? orderTotal(o) : orderRemaining(db, o))}</b></span>
             </div>
             <div className="row between small muted">

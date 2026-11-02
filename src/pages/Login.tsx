@@ -57,7 +57,7 @@ export default function Login() {
           {error && <p className="error-text" role="alert">{error}</p>}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map((k) => (
-              <button type="button" key={k} className="btn-lg" onClick={() => press(k)} aria-label={k === '⌫' ? 'Apagar' : k === 'C' ? 'Limpar' : k}>
+              <button type="button" key={k} className="btn-lg keypad-key" onClick={() => press(k)} aria-label={k === '⌫' ? 'Apagar' : k === 'C' ? 'Limpar' : k}>
                 {k}
               </button>
             ))}

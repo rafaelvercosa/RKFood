@@ -85,7 +85,7 @@ export default function Cozinha() {
               const mins = minutesSince(o.createdAt, now)
               const late = o.status !== 'pronto' && mins >= prefs.lateMin
               return (
-                <article key={o.id} className={`card ticket ${o.status} ${late ? 'late' : ''}`}>
+                <article key={o.id} className={`card comanda ticket ${o.status} ${late ? 'late' : ''}`}>
                   <div className="row between">
                     <span className="num">nº {o.number}</span>
                     <span className={`badge ${o.mode === 'viagem' ? 'preparo' : ''}`}>{o.mode === 'viagem' ? 'VIAGEM' : 'AQUI'}</span>

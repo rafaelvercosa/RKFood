@@ -209,10 +209,10 @@ function OrdersToday() {
       {orders.length === 0 && <div className="card empty">Nenhum pedido {filter === 'abertos' ? 'em aberto' : 'hoje'}.</div>}
       <div className="stack">
         {orders.map((o) => (
-          <div key={o.id} className="card stack" style={o.status === 'pronto' ? { borderColor: 'var(--ok)', borderWidth: 2 } : undefined}>
+          <div key={o.id} className={`card comanda stack ${o.status}`}>
             <div className="row between">
               <div>
-                <strong>nº {o.number} · {identLabel(o)}</strong>
+                <div className="row"><span className="num">nº {o.number}</span><strong>{identLabel(o)}</strong></div>
                 <div className="muted small">{hhmm(o.createdAt)} · há {minutesSince(o.createdAt, now)} min · {o.mode === 'local' ? 'aqui' : 'viagem'}</div>
               </div>
               <div className="stack" style={{ justifyItems: 'end', gap: 4 }}>

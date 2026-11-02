@@ -1,6 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+// Fontes embutidas no app (funcionam sem internet, no modo offline).
+import '@fontsource/atkinson-hyperlegible/400'
+import '@fontsource/atkinson-hyperlegible/700'
+import '@fontsource/big-shoulders-display/800'
 import './index.css'
 
 createRoot(document.getElementById('root')!).render(
