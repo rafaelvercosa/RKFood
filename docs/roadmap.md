@@ -43,6 +43,9 @@ Cenário real: internet de 4G **oscilando** com frequência e, às vezes, **hora
 - **Pedido pago como cortesia** (nova forma de pagamento) só com o PIN do **dono**. Hoje não existe perfil
   "dono", só atendente, cozinha, caixa e gerente. Será preciso criar essa marcação, por exemplo no usuário
   criado pelo `bootstrap_establishment`. A cortesia deve aparecer separada nos relatórios.
+- **Tudo que acontece fica no histórico** (`audit_log`), registrando quem pediu e quem autorizou. Hoje toda
+  gravação feita pelas funções já entra no histórico. Ainda faltam: a entrada e a saída por PIN, as
+  tentativas de PIN errado, a conexão de aparelho e as autorizações acima (cancelamento e cortesia).
 
 ### Outros
 - Backups automáticos diários (Google Drive + segundo local com bloqueio de exclusão)
