@@ -261,3 +261,4 @@ fieldset:disabled .btn[aria-disabled='true'] { opacity: 0.5; pointer-events: non
 .auth-pin { padding: 10px 12px; border-radius: var(--radius); background: var(--corn); color: var(--corn-ink); }
 .auth-pin input { font-size: 1.5rem; letter-spacing: 0.4em; text-align: center; max-width: 220px; }
 input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
+table.list tr.group-row td { background: var(--bg); }

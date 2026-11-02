@@ -4,15 +4,15 @@
 // Depois de gravar na nuvem, recarregamos os dados (o tempo real também avisa os outros aparelhos).
 
 import { newId } from '../lib/id'
-import type { Customer, Establishment, FiadoSettlement, OrderStatus, PaymentMethod, User } from '../types'
+import type { Customer, Establishment, FiadoSettlement, Order, OrderStatus, Payment, PaymentMethod, User } from '../types'
 import * as demo from './actions'
 import { isCloud, sb } from './backend'
-import { establishmentId, friendly, scheduleReload, withTimeout } from './cloud'
+import { establishmentId, fetchOrdersBetween, friendly, scheduleReload, withTimeout } from './cloud'
 import { clearOperator, currentUserId, operatorToken, setOperator } from './session'
 import { getDB } from './store'
 
-export type { CustomerInput, NewOrderInput, PaymentInput, ProductInput, Trashable, UserInput } from './actions'
-import type { CustomerInput, NewOrderInput, PaymentInput, ProductInput, Trashable, UserInput } from './actions'
+export type { CustomerInput, MaterialInput, NewOrderInput, PaymentInput, ProductInput, Trashable, UserInput } from './actions'
+import type { CustomerInput, MaterialInput, NewOrderInput, PaymentInput, ProductInput, Trashable, UserInput } from './actions'
 
 /** Erro de sessão do operador vencida: a tela volta para o PIN. */
 export class SessionExpiredError extends Error {}
@@ -187,3 +187,32 @@ export async function uploadImage(dataUrl: string): Promise<string> {
 }
 
 export type { PaymentMethod }
+
+// ---------------------------------------------------------------- área do dono
+
+export async function saveMaterial(m: MaterialInput): Promise<void> {
+  if (!isCloud) return void demo.saveMaterial(uid(), m)
+  await rpc('save_material', { p_id: m.id ?? null, p_name: m.name, p_unit: m.unit, p_cost_cents: m.cost })
+}
+
+export async function setMaterialTrashed(id: string, trashed: boolean): Promise<void> {
+  if (!isCloud) return demo.setMaterialTrashed(uid(), id, trashed)
+  await rpc('set_material_trashed', { p_id: id, p_trashed: trashed })
+}
+
+/** Substitui a ficha técnica do item. qty na unidade do material (kg, l ou un). */
+export async function saveRecipe(productId: string, items: { materialId: string; qty: number }[]): Promise<void> {
+  if (!isCloud) return demo.saveRecipe(uid(), productId, items)
+  await rpc('save_recipe', { p_product: productId, p_items: items.map((i) => ({ material_id: i.materialId, qty: i.qty })) })
+}
+
+/** Pedidos e pagamentos de um período (só leitura, para os relatórios). */
+export async function loadPeriod(from: string, to: string): Promise<{ orders: Order[]; payments: Payment[] }> {
+  if (!isCloud) {
+    const db = getDB()
+    const orders = db.orders.filter((o) => o.businessDate >= from && o.businessDate <= to)
+    const ids = new Set(orders.map((o) => o.id))
+    return { orders, payments: db.payments.filter((p) => ids.has(p.orderId)) }
+  }
+  return withTimeout(fetchOrdersBetween(from, to), 30000)
+}

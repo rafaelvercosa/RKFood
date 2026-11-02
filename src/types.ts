@@ -171,6 +171,26 @@ export interface AuditEntry {
   summary: string
 }
 
+/** Unidade de compra do material: quilo, litro ou unidade. */
+export type MaterialUnit = 'kg' | 'l' | 'un'
+
+/** O que a barraca compra (carne, palito, carvão, refrigerante...). */
+export interface Material {
+  id: string
+  name: string
+  unit: MaterialUnit
+  /** Custo em centavos por kg, por litro ou por unidade (0 = não informado). */
+  cost: number
+  deletedAt: string | null
+}
+
+/** Uma linha da ficha técnica: quanto de um material um item do cardápio gasta, na unidade do material. */
+export interface RecipeItem {
+  productId: string
+  materialId: string
+  qty: number
+}
+
 export interface Database {
   version: number
   establishment: Establishment
@@ -182,4 +202,6 @@ export interface Database {
   customers: Customer[]
   settlements: FiadoSettlement[]
   audit: AuditEntry[]
+  materials: Material[]
+  recipes: RecipeItem[]
 }

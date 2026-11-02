@@ -2,7 +2,7 @@
 // para que dê para testar todas as telas.
 
 import { newId } from '../lib/id'
-import type { Category, Database, Product, User } from '../types'
+import type { Category, Database, Material, Product, RecipeItem, User } from '../types'
 
 export const DB_VERSION = 1
 
@@ -15,6 +15,7 @@ export function emptyDatabase(): Database {
       paymentTiming: 'depois', phone: '', address: '', pixKey: '', kitchenTargetMin: 15, tableCount: 10,
     },
     users: [], categories: [], products: [], orders: [], payments: [], customers: [], settlements: [], audit: [],
+    materials: [], recipes: [],
   }
 }
 
@@ -29,6 +30,49 @@ export function seedDatabase(): Database {
   })
 
   const user = (name: string, pin: string, roles: User['roles']): User => ({ id: newId(), name, pin, roles, deletedAt: null })
+
+  const products = [
+    prod(espetos, 'Carne', 1000, 'Alcatra temperada'),
+    prod(espetos, 'Frango', 800, 'Peito de frango com bacon'),
+    prod(espetos, 'Linguiça', 800, 'Linguiça toscana'),
+    prod(espetos, 'Coração', 900, 'Coração de frango'),
+    prod(espetos, 'Queijo coalho', 900, 'Com melaço opcional'),
+    prod(espetos, 'Kafta', 1000, 'Carne moída temperada'),
+    prod(acomp, 'Farofa', 400),
+    prod(acomp, 'Vinagrete', 400),
+    prod(acomp, 'Pão de alho', 600),
+    prod(bebidas, 'Refrigerante lata', 600, '', false),
+    prod(bebidas, 'Água mineral', 400, '', false),
+    prod(bebidas, 'Cerveja lata', 700, '', false),
+  ]
+
+  // Materiais e fichas técnicas de exemplo (custos aproximados, só para demonstração).
+  const mat = (name: string, unit: Material['unit'], cost: number): Material => ({ id: newId(), name, unit, cost, deletedAt: null })
+  const materials = [
+    mat('Alcatra', 'kg', 4800), mat('Peito de frango', 'kg', 2200), mat('Bacon', 'kg', 3600),
+    mat('Linguiça toscana', 'kg', 2600), mat('Coração de frango', 'kg', 3000), mat('Queijo coalho', 'kg', 4200),
+    mat('Carne moída', 'kg', 3400), mat('Farinha de mandioca', 'kg', 900), mat('Tomate', 'kg', 700),
+    mat('Pão de alho (pacote)', 'un', 1400), mat('Palito de churrasco', 'un', 5), mat('Carvão', 'kg', 600),
+    mat('Refrigerante lata', 'un', 280), mat('Água mineral', 'un', 120), mat('Cerveja lata', 'un', 350),
+  ]
+  const m = (name: string) => materials.find((x) => x.name === name)!.id
+  const ficha = (product: string, items: [string, number][]): RecipeItem[] =>
+    items.map(([material, qty]) => ({ productId: products.find((x) => x.name === product)!.id, materialId: m(material), qty }))
+  const espeto = (carne: [string, number][]): [string, number][] => [...carne, ['Palito de churrasco', 1], ['Carvão', 0.05]]
+  const recipes = [
+    ...ficha('Carne', espeto([['Alcatra', 0.12]])),
+    ...ficha('Frango', espeto([['Peito de frango', 0.1], ['Bacon', 0.03]])),
+    ...ficha('Linguiça', espeto([['Linguiça toscana', 0.12]])),
+    ...ficha('Coração', espeto([['Coração de frango', 0.1]])),
+    ...ficha('Queijo coalho', espeto([['Queijo coalho', 0.08]])),
+    ...ficha('Kafta', espeto([['Carne moída', 0.12]])),
+    ...ficha('Farofa', [['Farinha de mandioca', 0.08]]),
+    ...ficha('Vinagrete', [['Tomate', 0.1]]),
+    ...ficha('Pão de alho', [['Pão de alho (pacote)', 0.2], ['Carvão', 0.03]]),
+    ...ficha('Refrigerante lata', [['Refrigerante lata', 1]]),
+    ...ficha('Água mineral', [['Água mineral', 1]]),
+    ...ficha('Cerveja lata', [['Cerveja lata', 1]]),
+  ]
 
   return {
     version: DB_VERSION,
@@ -53,20 +97,7 @@ export function seedDatabase(): Database {
       user('Caixa', '3333', ['caixa']),
     ],
     categories: [espetos, acomp, bebidas],
-    products: [
-      prod(espetos, 'Carne', 1000, 'Alcatra temperada'),
-      prod(espetos, 'Frango', 800, 'Peito de frango com bacon'),
-      prod(espetos, 'Linguiça', 800, 'Linguiça toscana'),
-      prod(espetos, 'Coração', 900, 'Coração de frango'),
-      prod(espetos, 'Queijo coalho', 900, 'Com melaço opcional'),
-      prod(espetos, 'Kafta', 1000, 'Carne moída temperada'),
-      prod(acomp, 'Farofa', 400),
-      prod(acomp, 'Vinagrete', 400),
-      prod(acomp, 'Pão de alho', 600),
-      prod(bebidas, 'Refrigerante lata', 600, '', false),
-      prod(bebidas, 'Água mineral', 400, '', false),
-      prod(bebidas, 'Cerveja lata', 700, '', false),
-    ],
+    products,
     orders: [],
     payments: [],
     customers: [
@@ -74,5 +105,7 @@ export function seedDatabase(): Database {
     ],
     settlements: [],
     audit: [],
+    materials,
+    recipes,
   }
 }

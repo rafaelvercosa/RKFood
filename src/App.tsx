@@ -9,6 +9,7 @@ import Caixa from './pages/Caixa'
 import Cozinha from './pages/Cozinha'
 import Fiado, { ClienteFiado } from './pages/Fiado'
 import Gerente from './pages/Gerente'
+import Dono from './pages/Dono'
 import Home from './pages/Home'
 import Login from './pages/Login'
 
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/fiado" element={<RequireRole role="caixa"><Fiado /></RequireRole>} />
         <Route path="/fiado/:id" element={<RequireRole role="caixa"><ClienteFiado /></RequireRole>} />
         <Route path="/gerente/*" element={<RequireRole role="gerente"><Gerente /></RequireRole>} />
+        <Route path="/dono/*" element={<RequireRole role="dono"><Dono /></RequireRole>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ToastHost />

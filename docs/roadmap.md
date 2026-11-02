@@ -6,7 +6,9 @@
 - **Etapa 3 (nov/2026):** visual "placa de barraca"; mesa em destaque; mesas 1 a 10; comer aqui/para viagem;
   cronômetro da cozinha com tempo estimado e alerta de atrasados; gerente adianta pedido na fila; perfil
   **dono**; cancelamento só com PIN de gerente; **cortesia** só com PIN do dono; histórico com entrada e saída
-  por PIN, PIN errado, autorização negada e conexão de aparelho
+  por PIN, PIN errado, autorização negada e conexão de aparelho; quantidade de mesas configurável; aparência só
+  pelo dono; **área do dono** com vendas por período (dia, semana, mês, datas), materiais, ficha técnica, custo e
+  lucro estimados e lista de compras (repor o que foi consumido)
 
 ## Agora
 - Publicar: aplicar o banco no Supabase, cadastrar o primeiro estabelecimento, deploy na Vercel
@@ -47,6 +49,6 @@ Cenário real: internet de 4G **oscilando** com frequência e, às vezes, **hora
 ### Outros
 - Backups automáticos diários (Google Drive + segundo local com bloqueio de exclusão)
 - Painel do administrador da plataforma (cadastrar estabelecimentos sem SQL, ativar/bloquear)
-- Ficha técnica, consumo de material e lista de compras
-- Relatórios por período, gráficos e exportação para planilha
+- Controle de saldo de estoque (lançar compras e ver quanto tem de cada material; avisar abaixo do mínimo)
+- Gráficos e exportação para planilha nos relatórios do dono
 - Fechar a conta da mesa juntando vários pedidos

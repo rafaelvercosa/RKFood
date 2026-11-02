@@ -11,7 +11,7 @@ import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { today } from '../lib/dates'
 import { deviceInfo } from '../lib/device'
-import type { AuditEntry, Category, Customer, Database, Establishment, FiadoSettlement, Order, Payment, Product, User } from '../types'
+import type { AuditEntry, Category, Customer, Database, Establishment, FiadoSettlement, Material, Order, Payment, Product, RecipeItem, User } from '../types'
 import { sb } from './backend'
 import { clearOperator } from './session'
 import { DB_VERSION } from './seed'
@@ -154,7 +154,7 @@ export async function chooseEstablishment(id: string): Promise<void> {
 
 function startRealtime(eid: string): void {
   stopRealtime()
-  const tables = ['orders', 'order_items', 'payments', 'fiado_settlements', 'products', 'categories', 'customers']
+  const tables = ['orders', 'order_items', 'payments', 'fiado_settlements', 'products', 'categories', 'customers', 'materials', 'recipe_items']
   let ch = sb().channel(`rkfood:${eid}`)
   for (const table of tables) {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table, filter: `establishment_id=eq.${eid}` }, () => scheduleReload())
@@ -214,7 +214,7 @@ async function reload(eid: string): Promise<void> {
   const db = sb()
   const E = 'establishment_id'
 
-  const [est, staff, categories, products, customers, settlements, fiadoPays, audit] = await Promise.all([
+  const [est, staff, categories, products, customers, settlements, fiadoPays, audit, materials, recipes] = await Promise.all([
     db.from('establishments').select('*').eq('id', eid).single(),
     all<Row>((a, b) => db.from('staff').select('id, name, roles, deleted_at').eq(E, eid).range(a, b)),
     all<Row>((a, b) => db.from('categories').select('*').eq(E, eid).order('sort').range(a, b)),
@@ -223,6 +223,8 @@ async function reload(eid: string): Promise<void> {
     all<Row>((a, b) => db.from('fiado_settlements').select('*').eq(E, eid).order('created_at').range(a, b)),
     all<Row>((a, b) => db.from('payments').select('order_id').eq(E, eid).eq('method', 'fiado').range(a, b)),
     db.from('audit_log').select('*').eq('establishment_id', eid).order('at', { ascending: false }).limit(300),
+    all<Row>((a, b) => db.from('materials').select('*').eq(E, eid).order('name').range(a, b)),
+    all<Row>((a, b) => db.from('recipe_items').select('*').eq(E, eid).range(a, b)),
   ])
   if (est.error) throw new Error(est.error.message)
   if (audit.error) throw new Error(audit.error.message)
@@ -247,13 +249,27 @@ async function reload(eid: string): Promise<void> {
 
   setSnapshot(toDatabase({
     est: est.data as Row, staff, categories, products, customers, settlements, orders, audit: (audit.data ?? []) as Row[],
+    materials, recipes,
   }))
+}
+
+/** Pedidos de um período (relatórios do dono). Não entram no snapshot de trabalho. */
+export async function fetchOrdersBetween(from: string, to: string): Promise<{ orders: Order[]; payments: Payment[] }> {
+  const eid = getDB().establishment.id
+  const rows = await all<Row>((a, b) =>
+    sb().from('orders').select(ORDER_SELECT).eq('establishment_id', eid)
+      .gte('business_date', from).lte('business_date', to)
+      .order('created_at')
+      .range(a, b),
+  )
+  return toOrders(rows)
 }
 
 // ---------------------------------------------------------------- conversão (banco → formato do app)
 
 function toDatabase(r: {
   est: Row; staff: Row[]; categories: Row[]; products: Row[]; customers: Row[]; settlements: Row[]; orders: Row[]; audit: Row[]
+  materials: Row[]; recipes: Row[]
 }): Database {
   const establishment: Establishment = {
     id: r.est.id, name: r.est.name, slogan: r.est.slogan, logoUrl: r.est.logo_url, coverUrl: r.est.cover_url,
@@ -272,8 +288,17 @@ function toDatabase(r: {
   const settlements: FiadoSettlement[] = r.settlements.map((s) => ({
     id: s.id, customerId: s.customer_id, amount: s.amount_cents, method: s.method, notes: s.notes, createdAt: s.created_at, createdBy: s.created_by,
   }))
+  const { orders, payments } = toOrders(r.orders)
+  const audit: AuditEntry[] = r.audit.map((a) => ({ id: String(a.id), at: a.at, userId: a.staff_id ?? '', action: a.action, summary: a.summary }))
+  const materials: Material[] = r.materials.map((m) => ({ id: m.id, name: m.name, unit: m.unit, cost: m.cost_cents, deletedAt: m.deleted_at }))
+  // numeric vem como texto da API
+  const recipes: RecipeItem[] = r.recipes.map((x) => ({ productId: x.product_id, materialId: x.material_id, qty: Number(x.qty) }))
+  return { version: DB_VERSION, establishment, users, categories, products, orders, payments, customers, settlements, audit, materials, recipes }
+}
+
+function toOrders(rows: Row[]): { orders: Order[]; payments: Payment[] } {
   const payments: Payment[] = []
-  const orders: Order[] = r.orders.map((o) => {
+  const orders: Order[] = rows.map((o) => {
     for (const p of o.payments as Row[]) {
       payments.push({
         id: p.id, orderId: p.order_id, method: p.method, amount: p.amount_cents, cashReceived: p.cash_received_cents,
@@ -291,6 +316,5 @@ function toDatabase(r: {
       })),
     }
   })
-  const audit: AuditEntry[] = r.audit.map((a) => ({ id: String(a.id), at: a.at, userId: a.staff_id ?? '', action: a.action, summary: a.summary }))
-  return { version: DB_VERSION, establishment, users, categories, products, orders, payments, customers, settlements, audit }
+  return { orders, payments }
 }

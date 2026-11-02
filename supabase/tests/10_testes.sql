@@ -310,6 +310,49 @@ begin
   raise notice 'OK mesas pelo gerente ou dono; aparência só pelo dono';
 end $$;
 
+-- Materiais e ficha técnica: só o dono
+do $$
+declare
+  ta uuid := (select v::uuid from ctx where k = 'ta');
+  tg uuid := (select v::uuid from ctx where k = 'tg');
+  carne uuid := (select id from public.products where name = 'Carne');
+  alcatra uuid;
+  palito uuid;
+begin
+  begin
+    perform public.save_material(tg, null, 'Alcatra', 'kg', 4800);
+    raise exception 'gerente não deveria cadastrar material';
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
+  alcatra := public.save_material(ta, null, 'Alcatra', 'kg', 4800);
+  palito := public.save_material(ta, null, 'Palito', 'un', 5);
+  begin
+    perform public.save_material(ta, null, 'alcatra', 'kg', 0);
+    raise exception 'nome repetido deveria falhar';
+  exception when others then assert sqlerrm = 'Já existe um material com esse nome', sqlerrm; end;
+  begin
+    perform public.save_material(ta, null, 'Óleo', 'galão', 0);
+    raise exception 'unidade inválida deveria falhar';
+  exception when others then assert sqlerrm = 'Unidade inválida', sqlerrm; end;
+  perform public.save_recipe(ta, carne, format('[{"material_id":"%s","qty":0.12},{"material_id":"%s","qty":1}]', alcatra, palito)::jsonb);
+  assert (select count(*) from public.recipe_items where product_id = carne) = 2, 'ficha salva';
+  assert (select qty from public.recipe_items where material_id = alcatra) = 0.12, 'quantidade decimal';
+  assert exists (select 1 from public.audit_log where summary = 'Ficha técnica de Carne: 0,12 kg de Alcatra + 1 un de Palito'), 'ficha no histórico';
+  begin
+    perform public.save_recipe(tg, carne, '[]');
+    raise exception 'gerente não deveria editar ficha';
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
+  begin
+    perform public.set_material_trashed(ta, alcatra, true);
+    raise exception 'material em uso não deveria ir para a lixeira';
+  exception when others then assert sqlerrm like 'Esse material está na ficha técnica de: Carne%', sqlerrm; end;
+  -- trocar a ficha substitui a anterior (sem duplicar)
+  perform public.save_recipe(ta, carne, format('[{"material_id":"%s","qty":0.15}]', alcatra)::jsonb);
+  assert (select count(*) from public.recipe_items where product_id = carne) = 1, 'ficha substituída';
+  perform public.set_material_trashed(ta, palito, true);
+  assert (select deleted_at is not null from public.materials where id = palito), 'palito na lixeira';
+  raise notice 'OK materiais e ficha técnica: só o dono edita, tudo no histórico';
+end $$;
+
 -- Entrada e saída por PIN e aparelho no histórico
 do $$
 declare tg uuid := (select v::uuid from ctx where k = 'tg');
@@ -333,6 +376,7 @@ declare ta uuid := (select v::uuid from ctx where k = 'ta');
 begin
   assert (select count(*) from public.orders) = 0, 'B não pode ver pedidos de A';
   assert (select count(*) from public.customers) = 0, 'B não pode ver clientes de A';
+  assert (select count(*) from public.materials) = 0 and (select count(*) from public.recipe_items) = 0, 'B não vê materiais nem fichas de A';
   assert (select count(*) from public.audit_log) = 1, 'B só vê o próprio histórico';
   begin
     perform public.save_category(ta, null, 'Invasão');

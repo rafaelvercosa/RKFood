@@ -8,7 +8,7 @@ import { newId } from '../lib/id'
 import { brl } from '../lib/money'
 import { nowIso, today } from '../lib/dates'
 import type {
-  Category, Customer, Database, Establishment, FiadoSettlement, IdentType, Order, OrderItem,
+  Category, Customer, Database, Establishment, FiadoSettlement, IdentType, Material, Order, OrderItem,
   OrderStatus, PaymentMethod, Product, ServiceMode, User,
 } from '../types'
 import { METHOD_LABEL, STATUS_LABEL } from '../types'
@@ -382,5 +382,81 @@ export function saveUser(userId: string, u: UserInput): void {
       d.users.push({ ...u, name, id: newId(), deletedAt: null })
     }
     return `Usuário ${name} (${u.roles.join(', ')})`
+  })
+}
+
+// ---------------------------------------------------------------- Materiais e ficha técnica (só o dono)
+
+function requireOwner(d: Database, userId: string): void {
+  if (!isOwner(d, userId)) throw new Error('Seu perfil não permite esta ação.')
+}
+
+const qtyLabel = (qty: number, unit: Material['unit']) => `${String(Math.round(qty * 10000) / 10000).replace('.', ',')} ${unit}`
+
+export type MaterialInput = Omit<Material, 'id' | 'deletedAt'> & { id?: string }
+
+export function saveMaterial(userId: string, m: MaterialInput): Material {
+  const name = m.name.trim()
+  if (!name) throw new Error('Informe o nome do material')
+  if (!['kg', 'l', 'un'].includes(m.unit)) throw new Error('Unidade inválida')
+  if (!Number.isInteger(m.cost) || m.cost < 0) throw new Error('Custo inválido')
+  let saved!: Material
+  commit(userId, m.id ? 'material.editar' : 'material.criar', (d) => {
+    requireOwner(d, userId)
+    if (d.materials.some((x) => !x.deletedAt && x.id !== m.id && x.name.trim().toLowerCase() === name.toLowerCase()))
+      throw new Error('Já existe um material com esse nome')
+    if (m.id) {
+      const cur = d.materials.find((x) => x.id === m.id)
+      if (!cur) throw new Error('Material não encontrado')
+      Object.assign(cur, { name, unit: m.unit, cost: m.cost })
+      saved = { ...cur }
+    } else {
+      saved = { id: newId(), name, unit: m.unit, cost: m.cost, deletedAt: null }
+      d.materials.push(saved)
+    }
+    return `Material ${name} (${m.unit}, custo ${brl(m.cost)} por ${m.unit})`
+  })
+  return saved
+}
+
+export function setMaterialTrashed(userId: string, id: string, trashed: boolean): void {
+  commit(userId, trashed ? 'material.excluir' : 'material.restaurar', (d) => {
+    requireOwner(d, userId)
+    const m = d.materials.find((x) => x.id === id)
+    if (!m) throw new Error('Material não encontrado')
+    if (trashed) {
+      const used = d.recipes
+        .filter((r) => r.materialId === id)
+        .map((r) => d.products.find((p) => p.id === r.productId && !p.deletedAt)?.name)
+        .filter(Boolean)
+        .sort()
+      if (used.length) throw new Error(`Esse material está na ficha técnica de: ${used.join(', ')}. Tire de lá antes.`)
+    }
+    m.deletedAt = trashed ? nowIso() : null
+    return `Material "${m.name}" ${trashed ? 'movido para a lixeira' : 'restaurado'}`
+  })
+}
+
+/** Substitui a ficha técnica inteira de um item do cardápio. qty na unidade do material. */
+export function saveRecipe(userId: string, productId: string, items: { materialId: string; qty: number }[]): void {
+  commit(userId, 'ficha.editar', (d) => {
+    requireOwner(d, userId)
+    const product = d.products.find((p) => p.id === productId)
+    if (!product) throw new Error('Item do cardápio não encontrado')
+    const parts: string[] = []
+    const seen = new Set<string>()
+    for (const it of items) {
+      const m = d.materials.find((x) => x.id === it.materialId && !x.deletedAt)
+      if (!m) throw new Error('Material não encontrado')
+      if (!(it.qty > 0)) throw new Error(`Quantidade inválida para ${m.name}`)
+      if (seen.has(m.id)) throw new Error(`${m.name} aparece duas vezes na ficha`)
+      seen.add(m.id)
+      parts.push(`${qtyLabel(it.qty, m.unit)} de ${m.name}`)
+    }
+    d.recipes = [
+      ...d.recipes.filter((r) => r.productId !== productId),
+      ...items.map((it) => ({ productId, materialId: it.materialId, qty: Math.round(it.qty * 10000) / 10000 })),
+    ]
+    return `Ficha técnica de ${product.name}: ${parts.length ? parts.join(' + ') : 'sem materiais'}`
   })
 }

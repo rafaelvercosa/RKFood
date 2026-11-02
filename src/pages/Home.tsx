@@ -10,6 +10,7 @@ const AREAS: { role: Role; to: string; ico: string; label: string; desc: string 
   { role: 'caixa', to: '/caixa', ico: '💳', label: 'Caixa', desc: 'Receber pagamentos' },
   { role: 'caixa', to: '/fiado', ico: '📒', label: 'Fiado', desc: 'Clientes e extratos' },
   { role: 'gerente', to: '/gerente', ico: '⚙️', label: 'Gerência', desc: 'Cardápio, equipe, relatórios' },
+  { role: 'dono', to: '/dono', ico: '💰', label: 'Área do dono', desc: 'Vendas, ficha técnica e compras' },
 ]
 
 export default function Home() {

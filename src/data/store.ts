@@ -28,6 +28,8 @@ function load(): Database {
       if (parsed.version === DB_VERSION) {
         parsed.establishment.kitchenTargetMin ??= 15 // demonstração salva antes do tempo estimado
         parsed.establishment.tableCount ??= 10 // ... e antes da quantidade de mesas
+        parsed.materials ??= [] // ... e antes da ficha técnica
+        parsed.recipes ??= []
         // salva antes do perfil dono: o primeiro gerente vira dono (igual à migração do banco)
         if (!parsed.users.some((u) => u.roles.includes('dono'))) {
           parsed.users.find((u) => !u.deletedAt && u.roles.includes('gerente'))?.roles.push('dono')

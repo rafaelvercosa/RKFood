@@ -72,13 +72,19 @@
   Supabase): `establishments.table_count` (0 a 200, padrão 10) define os botões de mesa do atendente, e o
   gerente ou o dono muda; nome, frase, cor, logomarca e foto só o dono muda (`save_establishment` confere).
   O app é genérico: tudo que identifica a barraca vem do cadastro do estabelecimento, nunca do código.
+- **Área do dono** (`/dono`, só perfil dono; migração 8, `20261104000100_materiais_e_ficha_tecnica.sql`, ainda
+  NÃO aplicada no Supabase): materiais (`materials`, unidade kg/l/un e custo opcional por unidade) e ficha
+  técnica (`recipe_items`, quantidade na unidade do material; a tela digita em g/ml). Relatórios em
+  `src/data/reports.ts` (puro): vendas por período, consumo, custo, lucro estimado e lista de compras =
+  repor o que foi consumido (sem saldo de estoque, por decisão do Rafael). No modo nuvem os pedidos do
+  período vêm de `fetchOrdersBetween` (não entram no snapshot de trabalho).
 - **Testes do banco no Windows sem Docker:** dá para rodar `supabase/tests` num Postgres em memória com o
-  PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 17 testes passando.
+  PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 18 testes passando.
 
 ## Próximos passos (nesta ordem)
 1. Deploy na Vercel (`docs/implantacao.md`).
 2. Depois: o **modo contingência offline** e o servidor local na barraca (`docs/roadmap.md`), backups,
-   painel do administrador da plataforma, ficha técnica e lista de compras, relatórios por período.
+   painel do administrador da plataforma, saldo de estoque.
 
 ## Mapa do código
 - `src/types.ts`: modelo de dados (camelCase; o banco usa snake_case e `cloud.ts` converte)

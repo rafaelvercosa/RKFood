@@ -283,3 +283,58 @@ describe('configuração do estabelecimento', () => {
     expect(getDB().establishment).toMatchObject({ brandColor: '#000000', slogan: 'Novo' })
   })
 })
+
+const rep = await import('./reports')
+
+describe('área do dono: vendas, ficha técnica e compras', () => {
+
+  it('períodos: semana de segunda a domingo e meses', () => {
+    const qua = new Date(2026, 10, 4) // quarta, 04/11/2026
+    expect(rep.periodDates('semana', qua)).toEqual({ from: '2026-11-02', to: '2026-11-08' })
+    expect(rep.periodDates('semana-passada', qua)).toEqual({ from: '2026-10-26', to: '2026-11-01' })
+    expect(rep.periodDates('mes', qua)).toEqual({ from: '2026-11-01', to: '2026-11-30' })
+    expect(rep.periodDates('mes-passado', qua)).toEqual({ from: '2026-10-01', to: '2026-10-31' })
+    expect(rep.periodDates('ontem', qua)).toEqual({ from: '2026-11-03', to: '2026-11-03' })
+  })
+
+  it('soma itens vendidos, consumo de materiais, custo e lista de compras', () => {
+    const { owner, carne, refri } = setup()
+    const a = actions.createOrder(owner.id, { identType: 'mesa', identValue: '1', mode: 'local', notes: '', items: [item(carne, 3), item(refri, 2)] })
+    actions.payOrder(owner.id, a.id, [{ method: 'pix', amount: 4200 }])
+    const b = actions.createOrder(owner.id, { identType: 'mesa', identValue: '2', mode: 'local', notes: '', items: [item(carne, 1)] })
+    actions.cancelOrder(owner.id, b.id, 'desistiu', '1234')
+    const db = getDB()
+    const r = rep.periodReport(db, db.orders, db.payments, today(), today())
+    expect(r.orderCount).toBe(1)
+    expect(r.cancelledCount).toBe(1)
+    expect(r.products.find((p) => p.name === 'Carne')).toMatchObject({ qty: 3, revenue: 3000, category: 'Espetinhos' })
+    expect(r.categories.map((c) => c.name)).toEqual(['Espetinhos', 'Bebidas'])
+
+    const c = rep.consumption(db, r.products)
+    const linha = (n: string) => c.lines.find((l) => l.name === n)!
+    // Carne = 120 g de alcatra + 1 palito + 50 g de carvão; 3 espetos
+    expect(linha('Alcatra')).toMatchObject({ qty: 0.36, buy: 0.4 })
+    expect(linha('Palito de churrasco')).toMatchObject({ qty: 3, buy: 3 })
+    expect(linha('Refrigerante lata')).toMatchObject({ qty: 2, buy: 2, cost: 560 })
+    expect(linha('Alcatra').cost).toBe(Math.round(0.36 * 4800))
+    expect(c.withoutRecipe).toEqual([])
+    expect(rep.formatQty(0.36, 'kg')).toBe('360 g')
+    expect(rep.formatQty(2.5, 'kg')).toBe('2,5 kg')
+    expect(rep.purchaseListText('Espetinho', today(), today(), c)).toContain('• Alcatra: 400 g')
+    expect(rep.productCost(db, carne.id)).toBe(Math.round(0.12 * 4800 + 5 + 0.05 * 600))
+  })
+
+  it('só o dono mexe em material e ficha; material em uso não vai para a lixeira', () => {
+    const { owner, carne } = setup()
+    const ger = getDB().users.find((u) => u.name === 'Gerente')!
+    expect(() => actions.saveMaterial(ger.id, { name: 'Sal', unit: 'kg', cost: 300 })).toThrow('perfil')
+    const sal = actions.saveMaterial(owner.id, { name: 'Sal grosso', unit: 'kg', cost: 300 })
+    expect(() => actions.saveMaterial(owner.id, { name: 'sal grosso', unit: 'kg', cost: 0 })).toThrow('com esse nome')
+    const atual = getDB().recipes.filter((r) => r.productId === carne.id).map((r) => ({ materialId: r.materialId, qty: r.qty }))
+    expect(() => actions.saveRecipe(ger.id, carne.id, atual)).toThrow('perfil')
+    actions.saveRecipe(owner.id, carne.id, [...atual, { materialId: sal.id, qty: 0.005 }])
+    expect(getDB().audit[0].summary).toContain('0,005 kg de Sal grosso')
+    expect(() => actions.setMaterialTrashed(owner.id, sal.id, true)).toThrow('ficha técnica de: Carne')
+    expect(() => actions.saveRecipe(owner.id, carne.id, [{ materialId: sal.id, qty: 0 }])).toThrow('Quantidade inválida')
+  })
+})
