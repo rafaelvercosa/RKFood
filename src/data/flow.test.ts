@@ -338,3 +338,37 @@ describe('área do dono: vendas, ficha técnica e compras', () => {
     expect(() => actions.saveRecipe(owner.id, carne.id, [{ materialId: sal.id, qty: 0 }])).toThrow('Quantidade inválida')
   })
 })
+
+describe('desempenho: vendas por pessoa e tempo de saída', () => {
+  it('soma pedidos, itens, vendas e ticket médio por quem fez o pedido', () => {
+    const { owner, carne } = setup()
+    const ana = getDB().users.find((u) => u.name.startsWith('Ana'))!
+    actions.createOrder(ana.id, { identType: 'mesa', identValue: '1', mode: 'local', notes: '', items: [item(carne, 3)] })
+    actions.createOrder(ana.id, { identType: 'mesa', identValue: '2', mode: 'local', notes: '', items: [item(carne, 1)] })
+    const c = actions.createOrder(owner.id, { identType: 'mesa', identValue: '3', mode: 'local', notes: '', items: [item(carne, 1)] })
+    actions.createOrder(owner.id, { identType: 'mesa', identValue: '4', mode: 'local', notes: '', items: [item(carne, 5)] })
+    actions.cancelOrder(owner.id, c.id, 'teste', '1234')
+    const lines = rep.staffPerformance(getDB().users, getDB().orders, today(), today())
+    expect(lines.map((l) => l.name)).toEqual(['Dono', 'Ana (atendente)'])
+    expect(lines[1]).toMatchObject({ orders: 2, items: 4, sales: 4000, averageTicket: 2000 })
+    expect(lines[0]).toMatchObject({ orders: 1, items: 5, sales: 5000 })
+  })
+
+  it('tempo de preparo (cozinha até pronto) e até entregar', () => {
+    const t = (min: number) => new Date(Date.parse('2026-11-03T20:00:00.000Z') + min * 60000).toISOString()
+    const o = (id: string, hist: [string, number][]) => ({
+      id, businessDate: '2026-11-03', status: hist[hist.length - 1][0], createdAt: t(0), createdBy: 'u',
+      items: [{ sendToKitchen: true, qty: 1, unitPrice: 100 }],
+      statusHistory: hist.map(([status, min]) => ({ status, at: t(min), by: 'u' })),
+    }) as unknown as Parameters<typeof rep.timeStats>[0][number]
+    const s = rep.timeStats([
+      o('a', [['novo', 0], ['preparo', 2], ['pronto', 10], ['entregue', 12]]),
+      o('b', [['aguardando_pagamento', 0], ['novo', 5], ['pronto', 25], ['entregue', 30]]),
+      o('c', [['novo', 0], ['preparo', 1]]),
+    ], '2026-11-03', '2026-11-03')
+    expect(s.prep).toEqual({ count: 2, avg: 15 * 60, max: 20 * 60 })
+    expect(s.delivery).toEqual({ count: 2, avg: 21 * 60 })
+    expect(rep.formatDuration(754)).toBe('12 min 34 s')
+    expect(rep.formatDuration(45)).toBe('45 s')
+  })
+})

@@ -3,17 +3,19 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { Header } from '../components/Layout'
 import { periodDates, type PeriodKey } from '../data/reports'
 import Compras from './dono/Compras'
+import Desempenho from './dono/Desempenho'
 import FichaTecnica from './dono/FichaTecnica'
 import Materiais from './dono/Materiais'
 import Vendas from './dono/Vendas'
 
-/** Período escolhido; vale para Vendas e Compras ao mesmo tempo. */
+/** Período escolhido; vale para Vendas, Desempenho e Compras ao mesmo tempo. */
 export interface Period { key: PeriodKey | 'datas'; from: string; to: string }
 
 export default function Dono() {
   const [period, setPeriod] = useState<Period>(() => ({ key: 'hoje', ...periodDates('hoje') }))
   const tabs = [
     { to: 'vendas', label: 'Vendas', el: <Vendas period={period} onPeriod={setPeriod} /> },
+    { to: 'desempenho', label: 'Desempenho', el: <Desempenho period={period} onPeriod={setPeriod} /> },
     { to: 'compras', label: 'Lista de compras', el: <Compras period={period} onPeriod={setPeriod} /> },
     { to: 'ficha', label: 'Ficha técnica', el: <FichaTecnica /> },
     { to: 'materiais', label: 'Materiais', el: <Materiais /> },

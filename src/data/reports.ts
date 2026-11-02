@@ -3,8 +3,8 @@
 
 import { businessDateBR, today } from '../lib/dates'
 import { brl } from '../lib/money'
-import type { Database, Material, MaterialUnit, Order, Payment, PaymentMethod } from '../types'
-import { orderTotal } from './selectors'
+import type { Database, Material, MaterialUnit, Order, Payment, PaymentMethod, User } from '../types'
+import { kitchenSentAt, needsKitchen, orderTotal } from './selectors'
 
 // ---------------------------------------------------------------- períodos
 
@@ -194,4 +194,83 @@ export function purchaseListText(establishment: string, from: string, to: string
     c.totalCost ? `Custo estimado: ${brl(c.totalCost)}` : '',
     c.withoutRecipe.length ? `Sem ficha técnica (fora da conta): ${c.withoutRecipe.join(', ')}` : '',
   ].filter((x, i, a) => x !== '' || a[i - 1] !== '').join('\n').trim()
+}
+
+// ---------------------------------------------------------------- desempenho da equipe
+
+export interface StaffLine {
+  staffId: string
+  name: string
+  orders: number
+  items: number
+  sales: number
+  averageTicket: number
+}
+
+/** Vendas por quem fez o pedido (atendente, caixa, gerente...), da que mais vendeu para a que menos. */
+export function staffPerformance(users: User[], orders: Order[], from: string, to: string): StaffLine[] {
+  const lines = new Map<string, StaffLine>()
+  for (const o of orders) {
+    if (o.status === 'cancelado' || o.businessDate < from || o.businessDate > to) continue
+    const l = lines.get(o.createdBy) ?? {
+      staffId: o.createdBy, name: users.find((u) => u.id === o.createdBy)?.name ?? 'Usuário removido', orders: 0, items: 0, sales: 0, averageTicket: 0,
+    }
+    l.orders += 1
+    l.items += o.items.reduce((s, i) => s + i.qty, 0)
+    l.sales += orderTotal(o)
+    lines.set(o.createdBy, l)
+  }
+  return [...lines.values()]
+    .map((l) => ({ ...l, averageTicket: Math.round(l.sales / l.orders) }))
+    .sort((a, b) => b.sales - a.sales || a.name.localeCompare(b.name))
+}
+
+// ---------------------------------------------------------------- tempo de saída dos pedidos
+
+const at = (o: Order, status: Order['status'], after = '') => o.statusHistory.find((h) => h.status === status && h.at >= after)?.at ?? null
+const secondsBetween = (a: string, b: string) => Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 1000))
+
+export interface TimeStats {
+  /** Da chegada na cozinha até ficar pronto (só pedidos que passaram pela cozinha). */
+  prep: { count: number; avg: number; max: number }
+  /** Do pedido feito até ser entregue. */
+  delivery: { count: number; avg: number }
+  byDay: { date: string; prepCount: number; prepAvg: number; deliveryAvg: number }[]
+}
+
+/** Tempos em segundos; média 0 quando não há pedido no grupo. */
+export function timeStats(orders: Order[], from: string, to: string): TimeStats {
+  const days = new Map<string, { prep: number[]; delivery: number[] }>()
+  const prep: number[] = []
+  const delivery: number[] = []
+  for (const o of orders) {
+    if (o.status === 'cancelado' || o.businessDate < from || o.businessDate > to) continue
+    const day = days.get(o.businessDate) ?? { prep: [], delivery: [] }
+    days.set(o.businessDate, day)
+    if (needsKitchen(o)) {
+      const sent = kitchenSentAt(o)
+      const ready = at(o, 'pronto', sent)
+      if (ready) { const s = secondsBetween(sent, ready); prep.push(s); day.prep.push(s) }
+    }
+    const delivered = at(o, 'entregue')
+    if (delivered) { const s = secondsBetween(o.createdAt, delivered); delivery.push(s); day.delivery.push(s) }
+  }
+  const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : 0)
+  return {
+    prep: { count: prep.length, avg: avg(prep), max: prep.length ? Math.max(...prep) : 0 },
+    delivery: { count: delivery.length, avg: avg(delivery) },
+    byDay: [...days.entries()]
+      .filter(([, d]) => d.prep.length || d.delivery.length)
+      .map(([date, d]) => ({ date, prepCount: d.prep.length, prepAvg: avg(d.prep), deliveryAvg: avg(d.delivery) }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+  }
+}
+
+/** 754 segundos → "12 min 34 s"; 45 → "45 s". */
+export function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  if (m === 0) return `${s} s`
+  if (m >= 60) return `${Math.floor(m / 60)} h ${m % 60} min`
+  return s ? `${m} min ${s} s` : `${m} min`
 }
