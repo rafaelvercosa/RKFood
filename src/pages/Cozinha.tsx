@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Header } from '../components/Layout'
-import { attempt, Segmented, useNow } from '../components/ui'
+import { attempt, OrderIdent, Segmented, useNow } from '../components/ui'
 import { setOrderStatus } from '../data/api'
 import { identLabel, KITCHEN_STATUSES, modeLabel, needsKitchen } from '../data/selectors'
 import { useDB } from '../data/store'
@@ -87,11 +87,10 @@ export default function Cozinha() {
               return (
                 <article key={o.id} className={`card comanda ticket ${o.status} ${late ? 'late' : ''}`}>
                   <div className="row between">
-                    <span className="num">nº {o.number}</span>
+                    <OrderIdent order={o} />
                     <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
                   </div>
                   <div className="row between">
-                    <strong>{identLabel(o)}</strong>
                     <span className={late ? 'error-text' : 'muted'}>{hhmm(o.createdAt)} · {mins} min</span>
                   </div>
                   <ul>
@@ -148,8 +147,8 @@ export function printTicket(o: Order, est: Establishment, paperMm: number): void
     .join('')
   printHtml(
     `Comanda ${o.number}`,
-    `<div class="row"><span class="big">nº ${o.number}</span><b style="font-size:1.3em">${modeLabel(o)}</b></div>
-     <div style="font-size:1.2em"><b>${escapeHtml(identLabel(o))}</b></div>
+    `<div class="row"><span class="big">${escapeHtml(identLabel(o))}</span><b style="font-size:1.3em">${modeLabel(o)}</b></div>
+     <div style="font-size:1.1em">pedido nº ${o.number}</div>
      <div class="muted">${escapeHtml(est.name)} · ${hhmm(o.createdAt)}</div><hr>${items}
      ${o.notes ? `<hr><b>Obs.: ${escapeHtml(o.notes)}</b>` : ''}<hr>`,
     { widthMm: paperMm },

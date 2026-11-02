@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Header } from '../components/Layout'
-import { attempt, Modal, Photo, Segmented, toast, useNow } from '../components/ui'
+import { attempt, Modal, OrderIdent, Photo, Segmented, toast, useNow } from '../components/ui'
 import { createOrder, setOrderStatus } from '../data/api'
 import { identLabel, isOrderPaid, modeLabel, orderTotal } from '../data/selectors'
 import { useDB } from '../data/store'
@@ -50,7 +50,7 @@ function useReadyWatcher(): number {
       const fresh = ready.filter((o) => !seen.current!.has(o.id))
       if (fresh.length) {
         beep(3)
-        toast(`Pronto: ${fresh.map((o) => `nº ${o.number} (${identLabel(o)})`).join(', ')}`)
+        toast(`Pronto: ${fresh.map((o) => `${identLabel(o)} (nº ${o.number})`).join(', ')}`)
       }
     }
     seen.current = ids
@@ -224,7 +224,7 @@ function OrdersToday() {
           <div key={o.id} className={`card comanda stack ${o.status}`}>
             <div className="row between">
               <div>
-                <div className="row"><span className="num">nº {o.number}</span><strong>{identLabel(o)}</strong></div>
+                <OrderIdent order={o} />
                 <div className="muted small">{hhmm(o.createdAt)} · há {minutesSince(o.createdAt, now)} min</div>
               </div>
               <div className="stack" style={{ justifyItems: 'end', gap: 4 }}>
