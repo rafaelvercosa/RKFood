@@ -30,6 +30,8 @@ export interface Establishment {
   pixKey: string
   /** Em quantos minutos um pedido deve ficar pronto (cronômetro e alerta da cozinha). */
   kitchenTargetMin: number
+  /** Quantos botões de mesa o atendente vê (0 = só o campo de texto). */
+  tableCount: number
 }
 
 export interface User {

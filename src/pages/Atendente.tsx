@@ -59,8 +59,6 @@ function useReadyWatcher(): number {
   return ready.length
 }
 
-// Atalhos das mesas mais usadas; mesa acima de 10 continua pelo campo de texto.
-const MESAS = Array.from({ length: 10 }, (_, i) => String(i + 1))
 
 function NewOrder({ onSent }: { onSent: () => void }) {
   const db = useDB()
@@ -73,6 +71,9 @@ function NewOrder({ onSent }: { onSent: () => void }) {
   const [notes, setNotes] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
   const [reviewing, setReviewing] = useState(false)
+  // botões das mesas 1..N (o gerente escolhe N); mesa fora disso continua pelo campo de texto
+  const tableCount = db.establishment.tableCount
+  const mesas = useMemo(() => Array.from({ length: tableCount }, (_, i) => String(i + 1)), [tableCount])
 
   const visible = products.filter((p) => catId === 'todos' || p.categoryId === catId)
   const qtyOf = (id: string) => cart.filter((l) => l.product.id === id).reduce((s, l) => s + l.qty, 0)
@@ -120,9 +121,9 @@ function NewOrder({ onSent }: { onSent: () => void }) {
               aria-label={identType === 'mesa' ? 'Número da mesa' : 'Nome do cliente'}
             />
           </div>
-          {identType === 'mesa' && (
+          {identType === 'mesa' && mesas.length > 0 && (
             <div className="table-grid" role="group" aria-label="Escolher mesa">
-              {MESAS.map((n) => (
+              {mesas.map((n) => (
                 <button key={n} type="button" className={identValue === n ? 'on' : ''} aria-pressed={identValue === n} onClick={() => setIdentValue(n)}>
                   {n}
                 </button>

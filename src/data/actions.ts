@@ -337,9 +337,23 @@ export function saveEstablishment(userId: string, e: Establishment): void {
   if (!Number.isInteger(e.kitchenTargetMin) || e.kitchenTargetMin < 1 || e.kitchenTargetMin > 180) {
     throw new Error('O tempo estimado deve ser de 1 a 180 minutos')
   }
+  if (!Number.isInteger(e.tableCount) || e.tableCount < 0 || e.tableCount > 200) {
+    throw new Error('A quantidade de mesas deve ser de 0 a 200')
+  }
   commit(userId, 'estabelecimento.editar', (d) => {
+    const cur = d.establishment
+    // aparência é do dono; o gerente muda funcionamento e contato (igual ao banco)
+    const look = (x: Establishment) => [x.name.trim(), x.slogan, x.logoUrl, x.coverUrl, x.brandColor].join('\u0000')
+    if (look(e) !== look(cur) && !isOwner(d, userId)) {
+      throw new Error('Só o dono pode mudar o nome, a frase, a cor, a logomarca e a foto')
+    }
+    const changes = [
+      cur.kitchenTargetMin !== e.kitchenTargetMin && `tempo estimado: ${cur.kitchenTargetMin} → ${e.kitchenTargetMin} min`,
+      cur.tableCount !== e.tableCount && `mesas: ${cur.tableCount} → ${e.tableCount}`,
+      cur.brandColor !== e.brandColor && `cor: ${cur.brandColor} → ${e.brandColor}`,
+    ].filter(Boolean)
     d.establishment = { ...e, name: e.name.trim() }
-    return 'Dados do estabelecimento atualizados'
+    return `Dados do estabelecimento atualizados${changes.length ? ` (${changes.join('; ')})` : ''}`
   })
 }
 

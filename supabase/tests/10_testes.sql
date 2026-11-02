@@ -187,7 +187,7 @@ declare
   e public.establishments := (select e from public.establishments e);
   o public.orders;
 begin
-  perform public.save_establishment(ta, e.name, e.slogan, null, null, '#112233', 'antes', '', '', 'chave@pix', 15);
+  perform public.save_establishment(ta, e.name, e.slogan, null, null, '#112233', 'antes', '', '', 'chave@pix', 15, 10);
   o := public.create_order(ta, 'mesa', '9', 'local', '', jsonb_build_array(jsonb_build_object('product_id', carne, 'qty', 1)));
   assert o.status = 'aguardando_pagamento', 'deveria aguardar pagamento';
   begin
@@ -198,7 +198,7 @@ begin
   assert (select status from public.orders where id = o.id) = 'novo', 'pago → cozinha';
   raise notice 'OK cobrança antes: só vai para a cozinha depois de pago';
   begin
-    perform public.save_establishment(ta, e.name, e.slogan, null, null, '#112233', 'depois', '', '', 'chave@pix', 0);
+    perform public.save_establishment(ta, e.name, e.slogan, null, null, '#112233', 'depois', '', '', 'chave@pix', 0, 10);
     raise exception 'tempo estimado 0 deveria falhar';
   exception when others then assert sqlerrm like 'O tempo estimado deve ser%', sqlerrm; end;
   raise notice 'OK tempo estimado de preparo validado';
@@ -252,7 +252,7 @@ declare
   o public.orders;
   msg text;
 begin
-  perform public.save_establishment((select v::uuid from ctx where k = 'ta'), 'Espetinho A', '', null, null, '#112233', 'depois', '', '', '', 15);
+  perform public.save_establishment((select v::uuid from ctx where k = 'ta'), 'Espetinho A', '', null, null, '#112233', 'depois', '', '', '', 15, 10);
   o := public.create_order(tana, 'mesa', '7', 'local', '', jsonb_build_array(jsonb_build_object('product_id', carne, 'qty', 1)));
   msg := public.cancel_order(tcx, o.id, 'cliente foi embora', '0000');
   assert msg like 'PIN de gerente incorreto%', coalesce(msg, 'cancelou com PIN errado');
@@ -285,6 +285,29 @@ begin
   perform public.set_order_priority(tg, o.id, true, 'Cliente esperou demais');
   assert (select priority_at is not null from public.orders where id = o.id), 'adiantado';
   raise notice 'OK só gerente adianta pedido';
+end $$;
+
+-- Mesas: gerente ou dono; aparência: só o dono
+do $$
+declare
+  ta uuid := (select v::uuid from ctx where k = 'ta');
+  tg uuid := (select v::uuid from ctx where k = 'tg');
+  e public.establishments := (select e from public.establishments e);
+begin
+  perform public.save_establishment(tg, e.name, e.slogan, e.logo_url, e.cover_url, e.brand_color, e.payment_timing, e.phone, e.address, e.pix_key, e.kitchen_target_min, 25);
+  assert (select table_count from public.establishments) = 25, 'gerente muda as mesas';
+  begin
+    perform public.save_establishment(tg, e.name, e.slogan, e.logo_url, e.cover_url, '#000000', e.payment_timing, e.phone, e.address, e.pix_key, e.kitchen_target_min, 25);
+    raise exception 'gerente não deveria mudar a cor';
+  exception when others then assert sqlerrm like 'Só o dono pode mudar o nome%', sqlerrm; end;
+  begin
+    perform public.save_establishment(ta, e.name, e.slogan, e.logo_url, e.cover_url, e.brand_color, e.payment_timing, e.phone, e.address, e.pix_key, e.kitchen_target_min, 201);
+    raise exception '201 mesas deveria falhar';
+  exception when others then assert sqlerrm like 'A quantidade de mesas%', sqlerrm; end;
+  perform public.save_establishment(ta, 'Espetinho A', 'Novo slogan', e.logo_url, e.cover_url, '#000000', e.payment_timing, e.phone, e.address, e.pix_key, e.kitchen_target_min, 25);
+  assert (select brand_color = '#000000' and slogan = 'Novo slogan' from public.establishments), 'dono muda a aparência';
+  assert exists (select 1 from public.audit_log where summary like '%mesas: 10 → 25%'), 'mudança de mesas no histórico';
+  raise notice 'OK mesas pelo gerente ou dono; aparência só pelo dono';
 end $$;
 
 -- Entrada e saída por PIN e aparelho no histórico

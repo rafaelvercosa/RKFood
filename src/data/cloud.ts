@@ -258,7 +258,7 @@ function toDatabase(r: {
   const establishment: Establishment = {
     id: r.est.id, name: r.est.name, slogan: r.est.slogan, logoUrl: r.est.logo_url, coverUrl: r.est.cover_url,
     brandColor: r.est.brand_color, paymentTiming: r.est.payment_timing, phone: r.est.phone, address: r.est.address, pixKey: r.est.pix_key,
-    kitchenTargetMin: r.est.kitchen_target_min,
+    kitchenTargetMin: r.est.kitchen_target_min, tableCount: r.est.table_count,
   }
   const users: User[] = r.staff.map((s) => ({ id: s.id, name: s.name, pin: '', roles: s.roles, deletedAt: s.deleted_at }))
   const categories: Category[] = r.categories.map((c) => ({ id: c.id, name: c.name, sort: c.sort, deletedAt: c.deleted_at }))

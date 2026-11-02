@@ -68,8 +68,12 @@
   Histórico também de entrada/saída por PIN, PIN errado e conexão de aparelho (`log_device_event`).
   **Aplicada no Supabase real e testada na nuvem em 02/11/2026** (o Rafael virou dono); só a conexão de
   aparelho não foi testada na nuvem, porque exige sair e entrar com a senha do aparelho.
+- **Configuração do dono** (migração 7, `20261103000400_mesas_e_aparencia.sql`, ainda NÃO aplicada no
+  Supabase): `establishments.table_count` (0 a 200, padrão 10) define os botões de mesa do atendente, e o
+  gerente ou o dono muda; nome, frase, cor, logomarca e foto só o dono muda (`save_establishment` confere).
+  O app é genérico: tudo que identifica a barraca vem do cadastro do estabelecimento, nunca do código.
 - **Testes do banco no Windows sem Docker:** dá para rodar `supabase/tests` num Postgres em memória com o
-  PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 16 testes passando.
+  PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 17 testes passando.
 
 ## Próximos passos (nesta ordem)
 1. Deploy na Vercel (`docs/implantacao.md`).

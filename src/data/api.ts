@@ -161,7 +161,7 @@ export async function saveEstablishment(e: Establishment): Promise<void> {
   await rpc('save_establishment', {
     p_name: e.name, p_slogan: e.slogan, p_logo_url: e.logoUrl, p_cover_url: e.coverUrl, p_brand_color: e.brandColor,
     p_payment_timing: e.paymentTiming, p_phone: e.phone, p_address: e.address, p_pix_key: e.pixKey,
-    p_kitchen_target_min: e.kitchenTargetMin,
+    p_kitchen_target_min: e.kitchenTargetMin, p_table_count: e.tableCount,
   })
 }
 

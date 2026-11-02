@@ -268,3 +268,18 @@ describe('dono, autorização por PIN e histórico', () => {
     expect(s.openAmount).toBe(0)
   })
 })
+
+describe('configuração do estabelecimento', () => {
+  it('gerente muda as mesas; aparência só o dono', () => {
+    const { owner } = setup()
+    const ger = getDB().users.find((u) => u.name === 'Gerente')!
+    const est = getDB().establishment
+    actions.saveEstablishment(ger.id, { ...est, tableCount: 25 })
+    expect(getDB().establishment.tableCount).toBe(25)
+    expect(getDB().audit[0].summary).toContain('mesas: 10 → 25')
+    expect(() => actions.saveEstablishment(ger.id, { ...getDB().establishment, brandColor: '#000000' })).toThrow('Só o dono')
+    expect(() => actions.saveEstablishment(owner.id, { ...getDB().establishment, tableCount: 201 })).toThrow('0 a 200')
+    actions.saveEstablishment(owner.id, { ...getDB().establishment, brandColor: '#000000', slogan: 'Novo' })
+    expect(getDB().establishment).toMatchObject({ brandColor: '#000000', slogan: 'Novo' })
+  })
+})
