@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from '../../components/ui'
 import { consumption, formatQty, periodReport, periodText, purchaseListText } from '../../data/reports'
 import { useDB } from '../../data/store'
 import { brl } from '../../lib/money'
 import { escapeHtml, printHtml } from '../../lib/print'
+import { downloadFile, shareContent } from '../../lib/share'
+import { purchaseListPdf } from './comprasPdf'
 import type { Period } from '../Dono'
 import { PeriodPicker, usePeriodOrders } from './Periodo'
 
@@ -14,6 +16,29 @@ export default function Compras({ period, onPeriod }: { period: Period; onPeriod
   const data = usePeriodOrders(from, to)
   const c = useMemo(() => consumption(db, periodReport(db, data.orders, data.payments, from, to).products), [db, data.orders, data.payments, from, to])
   const text = purchaseListText(db.establishment.name, from, to, c)
+  const title = `Lista de compras · ${periodText(from, to)}`
+
+  // O PDF fica pronto antes do toque: o celular só abre a janela de compartilhar logo depois do toque.
+  const [pdf, setPdf] = useState<File | null>(null)
+  useEffect(() => {
+    let alive = true
+    setPdf(null)
+    if (c.lines.length === 0) return
+    purchaseListPdf(db.establishment.name, from, to, c).then((f) => alive && setPdf(f)).catch(() => { /* segue só com o texto */ })
+    return () => { alive = false }
+  }, [c, db.establishment.name, from, to])
+
+  async function share() {
+    try {
+      const r = await shareContent({ title, text, file: pdf ?? undefined })
+      if (r === 'sem-suporte') {
+        await navigator.clipboard?.writeText(text).catch(() => {})
+        toast('Este aparelho não tem o botão de compartilhar. O texto foi copiado; use também Baixar PDF ou WhatsApp.')
+      }
+    } catch {
+      toast('Não deu para compartilhar. Tente o WhatsApp ou Baixar PDF.')
+    }
+  }
 
   function print() {
     const rows = c.lines.map((l) => `<tr><td>☐ ${escapeHtml(l.name)}</td><td class="right">${formatQty(l.buy, l.unit)}</td><td class="right">${formatQty(l.qty, l.unit)}</td><td class="right">${l.cost ? brl(l.cost) : '—'}</td></tr>`).join('')
@@ -44,12 +69,14 @@ export default function Compras({ period, onPeriod }: { period: Period; onPeriod
           <div className="row between">
             <h3>O que comprar</h3>
             <div className="row">
+              <button className="btn-sm btn-primary" onClick={share} disabled={c.lines.length === 0}>📤 Compartilhar</button>
+              <button className="btn-sm" onClick={() => pdf && downloadFile(pdf)} disabled={!pdf}>📄 Baixar PDF</button>
               <button className="btn-sm" onClick={print} disabled={c.lines.length === 0}>🖨️ Imprimir</button>
               <button className="btn-sm" onClick={copy} disabled={c.lines.length === 0}>Copiar</button>
               <a className="btn btn-sm" href={c.lines.length ? `https://wa.me/?text=${encodeURIComponent(text)}` : undefined} target="_blank" rel="noreferrer" aria-disabled={c.lines.length === 0}>📲 WhatsApp</a>
             </div>
           </div>
-          <p className="muted small">Repõe o que as vendas gastaram, pela ficha técnica de cada item. Quilo e litro arredondam para cima de 100 em 100 g/ml; unidade, para cima.</p>
+          <p className="muted small">Compartilhar abre a janela do celular para mandar a lista (em texto, com o PDF junto) pelo WhatsApp, e-mail, Telegram ou salvar numa anotação. Repõe o que as vendas gastaram, pela ficha técnica de cada item. Quilo e litro arredondam para cima de 100 em 100 g/ml; unidade, para cima.</p>
           {c.lines.length === 0 ? (
             <div className="empty">{db.recipes.length === 0 ? 'Cadastre os materiais e a ficha técnica dos itens para ver a lista de compras.' : 'Nenhum consumo no período.'}</div>
           ) : (
