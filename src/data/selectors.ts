@@ -167,3 +167,8 @@ function localDate(iso: string): string {
 export function identLabel(o: Pick<Order, 'identType' | 'identValue'>): string {
   return o.identType === 'mesa' ? `Mesa ${o.identValue}` : o.identValue
 }
+
+/** Mesmo texto dos botões do atendente, em todas as telas. */
+export function modeLabel(o: Pick<Order, 'mode'>): string {
+  return o.mode === 'viagem' ? 'Para viagem' : 'Comer aqui'
+}

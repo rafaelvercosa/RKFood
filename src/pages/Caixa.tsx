@@ -4,7 +4,7 @@ import { CustomerForm } from '../components/CustomerForm'
 import { Header } from '../components/Layout'
 import { attempt, Modal, Segmented } from '../components/ui'
 import { cancelOrder, payOrder, setOrderStatus, type PaymentInput } from '../data/api'
-import { customerBalance, identLabel, orderPaid, orderPayments, orderRemaining, orderTotal } from '../data/selectors'
+import { customerBalance, identLabel, modeLabel, orderPaid, orderPayments, orderRemaining, orderTotal } from '../data/selectors'
 import { useDB } from '../data/store'
 import { businessDateBR, dateBR, hhmm, today } from '../lib/dates'
 import { brl, centsToInput, parseBRL } from '../lib/money'
@@ -55,8 +55,11 @@ function OrderList({ paid }: { paid: boolean }) {
               <span className="money"><b>{brl(paid ? orderTotal(o) : orderRemaining(db, o))}</b></span>
             </div>
             <div className="row between small muted">
-              <span>{o.businessDate !== today() ? `${businessDateBR(o.businessDate)} ` : ''}{hhmm(o.createdAt)} · {o.items.reduce((s, i) => s + i.qty, 0)} itens · {o.mode === 'local' ? 'aqui' : 'viagem'}</span>
-              <span className={`badge ${o.status}`}>{STATUS_LABEL[o.status]}</span>
+              <span>{o.businessDate !== today() ? `${businessDateBR(o.businessDate)} ` : ''}{hhmm(o.createdAt)} · {itemCount(o)} {itemCount(o) === 1 ? 'item' : 'itens'}</span>
+              <span className="row" style={{ gap: 4 }}>
+                <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
+                <span className={`badge ${o.status}`}>{STATUS_LABEL[o.status]}</span>
+              </span>
             </div>
           </button>
         ))}
@@ -214,4 +217,8 @@ function printReceipt(db: Database, o: Order): void {
     ${rows}<hr><div class="row"><b>TOTAL</b><b>${brl(orderTotal(o))}</b></div>
     ${pays ? `<hr>${pays}` : ''}${remaining > 0 ? `<div class="row"><b>A PAGAR</b><b>${brl(remaining)}</b></div>` : ''}
     <hr><div style="text-align:center" class="muted">Não é documento fiscal · Obrigado!</div>`, { widthMm: 80 })
+}
+
+function itemCount(o: Order): number {
+  return o.items.reduce((s, i) => s + i.qty, 0)
 }
