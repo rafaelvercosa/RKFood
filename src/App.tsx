@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { RequireRole, useBrandColor } from './components/Layout'
 import { ToastHost } from './components/ui'
 import { isCloud } from './data/backend'
 import { startCloud, useCloud } from './data/cloud'
+import AceitarConvite from './pages/AceitarConvite'
 import ConectarAparelho from './pages/ConectarAparelho'
 import Atendente from './pages/Atendente'
 import Caixa from './pages/Caixa'
@@ -18,6 +20,16 @@ if (isCloud) startCloud()
 export default function App() {
   useBrandColor()
   const cloud = useCloud()
+  // link de convite (/convite/<código>): antes de conectar o aparelho e do PIN
+  const [invite, setInvite] = useState(() => (isCloud ? /^\/convite\/([\w-]+)/.exec(location.pathname)?.[1] ?? null : null))
+  if (invite && cloud.phase !== 'iniciando' && cloud.phase !== 'carregando') {
+    return (
+      <>
+        <AceitarConvite code={invite} onDone={() => { history.replaceState(null, '', '/entrar'); setInvite(null) }} />
+        <ToastHost />
+      </>
+    )
+  }
   if (isCloud && cloud.phase !== 'pronto') {
     return (
       <>

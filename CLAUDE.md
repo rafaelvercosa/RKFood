@@ -79,8 +79,21 @@
   `src/data/reports.ts` (puro): vendas por período, consumo, custo, lucro estimado e lista de compras =
   repor o que foi consumido (sem saldo de estoque, por decisão do Rafael). No modo nuvem os pedidos do
   período vêm de `fetchOrdersBetween` (não entram no snapshot de trabalho).
+- **Desempenho, perfis e convite** (migrações 9 `20261105000100_perfis_da_equipe.sql` e 10
+  `20261105000200_convite_e_aparelhos.sql`, ainda NÃO aplicadas no Supabase; até lá o modo nuvem deste
+  código quebra, porque lê colunas e a tabela `devices` que não existem):
+  - Área do dono → Desempenho: vendas e ticket médio por pessoa, ticket por dia, tempo médio de preparo e
+    de entrega (`staffPerformance`, `timeStats` em `reports.ts`).
+  - Perfis: telefone (WhatsApp), `created_by`, `blocked_at`. Gerente só cria atendente; editar, mudar
+    permissões, bloquear, excluir e restaurar perfis: só o dono.
+  - Convite: `create_invite` gera link `/convite/<código>` (uso único, 24 h) mandado pelo WhatsApp da pessoa;
+    o celular entra com **login anônimo do Supabase** (precisa ligar "Allow anonymous sign-ins" em Auth) e
+    `redeem_invite` o liga ao estabelecimento só para aquele perfil. `public.devices` registra os aparelhos
+    (os da conta do estabelecimento pela chave `rkfood:aparelho` do localStorage); o dono bloqueia em
+    Área do dono → Aparelhos. Testado só no banco local e no modo demonstração; falta testar num celular de
+    verdade depois da Vercel (o link precisa de endereço público).
 - **Testes do banco no Windows sem Docker:** dá para rodar `supabase/tests` num Postgres em memória com o
-  PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 18 testes passando.
+  PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 20 testes passando.
 
 ## Próximos passos (nesta ordem)
 1. Deploy na Vercel (`docs/implantacao.md`).

@@ -10,8 +10,8 @@
 import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { today } from '../lib/dates'
-import { deviceInfo } from '../lib/device'
-import type { AuditEntry, Category, Customer, Database, Establishment, FiadoSettlement, Material, Order, Payment, Product, RecipeItem, User } from '../types'
+import { deviceInfo, deviceKey } from '../lib/device'
+import type { AuditEntry, Category, Customer, Database, Device, Establishment, FiadoSettlement, Material, Order, Payment, Product, RecipeItem, User } from '../types'
 import { sb } from './backend'
 import { clearOperator } from './session'
 import { DB_VERSION } from './seed'
@@ -102,6 +102,31 @@ export async function signInDevice(email: string, password: string): Promise<voi
   await afterSignIn()
 }
 
+/**
+ * Celular que abriu o link de convite: entra com um login anônimo e o banco liga
+ * o aparelho ao estabelecimento, só para a pessoa do convite.
+ */
+export async function acceptInvite(code: string): Promise<void> {
+  const auth = sb().auth
+  const { data } = await auth.getSession()
+  if (data.session) {
+    try { localStorage.removeItem(EST_KEY) } catch { /* ignora */ }
+    await auth.signOut()
+  }
+  const { error } = await withTimeout(auth.signInAnonymously())
+  if (error) {
+    throw new Error(/anonymous/i.test(error.message)
+      ? 'O acesso por link ainda não está ligado neste estabelecimento. Avise o dono.'
+      : friendly(error.message))
+  }
+  const res = await withTimeout(sb().rpc('redeem_invite', { p_code: code, p_info: deviceInfo(), p_device_key: deviceKey() }))
+  if (res.error) {
+    await auth.signOut()
+    throw new Error(friendly(res.error.message))
+  }
+  await afterSignIn()
+}
+
 export async function signOutDevice(): Promise<void> {
   try { localStorage.removeItem(EST_KEY) } catch { /* ignora */ }
   await logDeviceEvent('desconectar')
@@ -111,7 +136,7 @@ export async function signOutDevice(): Promise<void> {
 /** Conexão e desconexão do aparelho ficam no histórico. Falha aqui não impede entrar ou sair. */
 async function logDeviceEvent(event: 'conectar' | 'desconectar'): Promise<void> {
   try {
-    await withTimeout(sb().rpc('log_device_event', { p_event: event, p_info: deviceInfo() }), 5000)
+    await withTimeout(sb().rpc('log_device_event', { p_event: event, p_info: deviceInfo(), p_device_key: deviceKey() }), 5000)
   } catch {
     // sem internet ou banco antigo: segue sem registrar
   }
@@ -154,7 +179,7 @@ export async function chooseEstablishment(id: string): Promise<void> {
 
 function startRealtime(eid: string): void {
   stopRealtime()
-  const tables = ['orders', 'order_items', 'payments', 'fiado_settlements', 'products', 'categories', 'customers', 'materials', 'recipe_items']
+  const tables = ['orders', 'order_items', 'payments', 'fiado_settlements', 'products', 'categories', 'customers', 'materials', 'recipe_items', 'devices']
   let ch = sb().channel(`rkfood:${eid}`)
   for (const table of tables) {
     ch = ch.on('postgres_changes', { event: '*', schema: 'public', table, filter: `establishment_id=eq.${eid}` }, () => scheduleReload())
@@ -214,7 +239,7 @@ async function reload(eid: string): Promise<void> {
   const db = sb()
   const E = 'establishment_id'
 
-  const [est, staff, categories, products, customers, settlements, fiadoPays, audit, materials, recipes] = await Promise.all([
+  const [est, staff, categories, products, customers, settlements, fiadoPays, audit, materials, recipes, devices] = await Promise.all([
     db.from('establishments').select('*').eq('id', eid).single(),
     all<Row>((a, b) => db.from('staff').select('id, name, roles, deleted_at, phone, created_by, blocked_at').eq(E, eid).range(a, b)),
     all<Row>((a, b) => db.from('categories').select('*').eq(E, eid).order('sort').range(a, b)),
@@ -225,6 +250,7 @@ async function reload(eid: string): Promise<void> {
     db.from('audit_log').select('*').eq('establishment_id', eid).order('at', { ascending: false }).limit(300),
     all<Row>((a, b) => db.from('materials').select('*').eq(E, eid).order('name').range(a, b)),
     all<Row>((a, b) => db.from('recipe_items').select('*').eq(E, eid).range(a, b)),
+    all<Row>((a, b) => db.from('devices').select('*').eq(E, eid).order('last_seen_at', { ascending: false }).range(a, b)),
   ])
   if (est.error) throw new Error(est.error.message)
   if (audit.error) throw new Error(audit.error.message)
@@ -249,7 +275,7 @@ async function reload(eid: string): Promise<void> {
 
   setSnapshot(toDatabase({
     est: est.data as Row, staff, categories, products, customers, settlements, orders, audit: (audit.data ?? []) as Row[],
-    materials, recipes,
+    materials, recipes, devices,
   }))
 }
 
@@ -269,7 +295,7 @@ export async function fetchOrdersBetween(from: string, to: string): Promise<{ or
 
 function toDatabase(r: {
   est: Row; staff: Row[]; categories: Row[]; products: Row[]; customers: Row[]; settlements: Row[]; orders: Row[]; audit: Row[]
-  materials: Row[]; recipes: Row[]
+  materials: Row[]; recipes: Row[]; devices: Row[]
 }): Database {
   const establishment: Establishment = {
     id: r.est.id, name: r.est.name, slogan: r.est.slogan, logoUrl: r.est.logo_url, coverUrl: r.est.cover_url,
@@ -295,7 +321,11 @@ function toDatabase(r: {
   const materials: Material[] = r.materials.map((m) => ({ id: m.id, name: m.name, unit: m.unit, cost: m.cost_cents, deletedAt: m.deleted_at }))
   // numeric vem como texto da API
   const recipes: RecipeItem[] = r.recipes.map((x) => ({ productId: x.product_id, materialId: x.material_id, qty: Number(x.qty) }))
-  return { version: DB_VERSION, establishment, users, categories, products, orders, payments, customers, settlements, audit, materials, recipes }
+  const devices: Device[] = r.devices.map((d) => ({
+    id: d.id, kind: d.kind, staffId: d.staff_id, info: d.info, firstSeenAt: d.first_seen_at, lastSeenAt: d.last_seen_at,
+    lastStaffId: d.last_staff_id, blockedAt: d.blocked_at,
+  }))
+  return { version: DB_VERSION, establishment, users, categories, products, orders, payments, customers, settlements, audit, materials, recipes, devices }
 }
 
 function toOrders(rows: Row[]): { orders: Order[]; payments: Payment[] } {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { attempt, Modal } from '../../components/ui'
-import { moveToTrash, saveUser, setUserBlocked, type UserInput } from '../../data/api'
+import { attempt, Modal, toast } from '../../components/ui'
+import { createInvite, moveToTrash, saveUser, setUserBlocked, type UserInput } from '../../data/api'
 import { isCloud } from '../../data/backend'
 import { hasRole, useCurrentUser } from '../../data/session'
 import { useDB } from '../../data/store'
@@ -21,6 +21,35 @@ export function formatPhone(digits: string): string {
   if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`
   if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`
   return digits
+}
+
+/** Link do WhatsApp para o número (com 55 do Brasil quando vier só DDD + número). */
+function whatsappTo(phone: string, text: string): string {
+  const d = phone.replace(/\D/g, '')
+  const full = d.length <= 11 ? `55${d}` : d
+  return `https://wa.me/${full}?text=${encodeURIComponent(text)}`
+}
+
+/** Gera o link de convite e abre o WhatsApp da pessoa com a mensagem pronta. */
+async function sendAccess(u: User, establishment: string) {
+  if (!isCloud) {
+    toast('O link de acesso funciona na versão publicada (nuvem). No modo demonstração, todos usam este aparelho.')
+    return
+  }
+  // a janela abre já no toque (o navegador bloqueia janela aberta depois de esperar a internet)
+  const win = window.open('', '_blank')
+  try {
+    const link = await createInvite(u.id)
+    const text = `Olá, ${u.name}! Este é o seu acesso ao ${establishment} no RKFood.\n\n` +
+      `Abra no seu celular (vale uma vez só, por 24 horas):\n${link}\n\nDepois, entre com o seu PIN.`
+    const url = whatsappTo(u.phone, text)
+    if (win) win.location.href = url
+    else location.href = url
+    toast(`Link de acesso de ${u.name} gerado`)
+  } catch (e) {
+    win?.close()
+    void attempt(() => { throw e })
+  }
 }
 
 export default function Equipe() {
@@ -46,12 +75,18 @@ export default function Equipe() {
                 {nameOf(u.createdBy) && ` · criado por ${nameOf(u.createdBy)}`}
               </div>
             </div>
-            {isOwner && <button className="btn-sm" onClick={() => setEditing(u)}>Editar</button>}
+            <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+              {u.phone && !u.blockedAt && u.id !== me?.id && (isOwner || (u.roles.length === 1 && u.roles[0] === 'atendente')) && (
+                <button className="btn-sm" onClick={() => void sendAccess(u, db.establishment.name)} title="Manda pelo WhatsApp um link que libera o celular da pessoa">📲 Enviar acesso</button>
+              )}
+              {isOwner && <button className="btn-sm" onClick={() => setEditing(u)}>Editar</button>}
+            </div>
           </div>
         ))}
       </div>
       <p className="muted small">
         Cada pessoa entra com o próprio PIN. Assim o histórico mostra quem fez cada pedido, pagamento ou alteração.
+        Com o WhatsApp cadastrado, "Enviar acesso" manda um link que libera o celular da pessoa (só o PIN dela funciona nele).
         {!isOwner && ' O gerente cria perfis de atendente; alterar, bloquear ou excluir é só com o dono.'}
       </p>
       {editing && <UserForm user={editing === 'novo' ? null : editing} isOwner={isOwner} onClose={() => setEditing(null)} />}

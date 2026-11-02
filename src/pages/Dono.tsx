@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { Header } from '../components/Layout'
 import { periodDates, type PeriodKey } from '../data/reports'
+import Aparelhos from './dono/Aparelhos'
 import Compras from './dono/Compras'
 import Desempenho from './dono/Desempenho'
 import FichaTecnica from './dono/FichaTecnica'
@@ -19,6 +20,7 @@ export default function Dono() {
     { to: 'compras', label: 'Lista de compras', el: <Compras period={period} onPeriod={setPeriod} /> },
     { to: 'ficha', label: 'Ficha técnica', el: <FichaTecnica /> },
     { to: 'materiais', label: 'Materiais', el: <Materiais /> },
+    { to: 'aparelhos', label: 'Aparelhos', el: <Aparelhos /> },
   ]
   return (
     <>

@@ -197,6 +197,19 @@ export interface RecipeItem {
   qty: number
 }
 
+/** Aparelho que entrou no sistema (conta do estabelecimento ou link de convite). */
+export interface Device {
+  id: string
+  kind: 'estabelecimento' | 'convite'
+  /** Convite: de quem é o celular. */
+  staffId: string | null
+  info: string
+  firstSeenAt: string
+  lastSeenAt: string
+  lastStaffId: string | null
+  blockedAt: string | null
+}
+
 export interface Database {
   version: number
   establishment: Establishment
@@ -210,4 +223,5 @@ export interface Database {
   audit: AuditEntry[]
   materials: Material[]
   recipes: RecipeItem[]
+  devices: Device[]
 }

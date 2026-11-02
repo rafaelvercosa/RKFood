@@ -15,7 +15,7 @@ export function emptyDatabase(): Database {
       paymentTiming: 'depois', phone: '', address: '', pixKey: '', kitchenTargetMin: 15, tableCount: 10,
     },
     users: [], categories: [], products: [], orders: [], payments: [], customers: [], settlements: [], audit: [],
-    materials: [], recipes: [],
+    materials: [], recipes: [], devices: [],
   }
 }
 
@@ -107,5 +107,6 @@ export function seedDatabase(): Database {
     audit: [],
     materials,
     recipes,
+    devices: [],
   }
 }

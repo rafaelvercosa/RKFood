@@ -4,7 +4,8 @@
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'a@teste.com'),
-  ('00000000-0000-0000-0000-00000000000b', 'b@teste.com');
+  ('00000000-0000-0000-0000-00000000000b', 'b@teste.com'),
+  ('00000000-0000-0000-0000-00000000000c', null); -- celular anônimo que vai abrir o link de convite
 
 create temp table ctx (k text primary key, v text);
 grant all on ctx to authenticated;
@@ -350,6 +351,83 @@ begin
   assert (select count(*) from public.operator_login((select v::uuid from ctx where k = 'ea'), '7777')) = 1, 'desbloqueado entra';
   raise notice 'OK perfis: gerente só cria atendente; só o dono edita, bloqueia e exclui';
 end $$;
+
+-- Convite por link e aparelhos
+do $$
+declare
+  ta uuid := (select v::uuid from ctx where k = 'ta');
+  tg uuid := (select v::uuid from ctx where k = 'tg');
+  bia uuid := (select id from public.staff where name = 'Bia');
+  caixa uuid := (select id from public.staff where name = 'Caixa');
+  code text;
+begin
+  begin
+    perform public.create_invite(tg, caixa);
+    raise exception 'gerente não deveria mandar acesso para o caixa';
+  exception when others then assert sqlerrm = 'O gerente só envia acesso para atendente', sqlerrm; end;
+  code := public.create_invite(tg, bia);
+  assert length(code) = 24, 'código do link';
+  insert into ctx values ('convite', code);
+  assert exists (select 1 from public.audit_log where summary like 'Link de acesso para Bia gerado por Gerente G%'), 'convite no histórico';
+  -- aparelho da conta do estabelecimento fica registrado ao entrar com o PIN
+  perform public.operator_login((select v::uuid from ctx where k = 'ea'), '3333', 'chave-balcao', 'Chrome no Windows');
+  assert (select kind = 'estabelecimento' and last_staff_id = caixa from public.devices where device_key = 'chave-balcao'), 'aparelho do balcão registrado';
+end $$;
+
+-- o celular da Bia abre o link (login anônimo = outro usuário do Supabase)
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');
+do $$
+declare
+  ea uuid := (select v::uuid from ctx where k = 'ea');
+  r record;
+begin
+  assert (select count(*) from public.establishments) = 0, 'sem convite não vê nada';
+  assert public.redeem_invite((select v from ctx where k = 'convite'), 'Chrome no Android', 'chave-celular-bia') = ea, 'convite aceito';
+  assert (select name from public.my_context()) = 'Espetinho A', 'celular ligado ao estabelecimento';
+  select * into r from public.operator_login(ea, '1234', 'chave-celular-bia', 'Chrome no Android');
+  assert r.token is null and r.name = 'Este celular é só de Bia.', coalesce(r.name, 'dono entrou no celular da Bia');
+  select * into r from public.operator_login(ea, '7777', 'chave-celular-bia', 'Chrome no Android');
+  assert r.token is not null and r.name = 'Bia', 'Bia entra no celular dela';
+  begin
+    perform public.redeem_invite((select v from ctx where k = 'convite'), 'x', 'outra');
+    raise exception 'link não deveria valer duas vezes';
+  exception when others then assert sqlerrm like 'Esse link já foi usado%', sqlerrm; end;
+end $$;
+
+-- o dono vê e bloqueia os aparelhos
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
+do $$
+declare
+  ta uuid := (select v::uuid from ctx where k = 'ta');
+  tg uuid := (select v::uuid from ctx where k = 'tg');
+  cel uuid := (select id from public.devices where device_key = 'chave-celular-bia');
+  balcao uuid := (select id from public.devices where device_key = 'chave-balcao');
+  r record;
+begin
+  assert (select kind = 'convite' and info = 'Chrome no Android' from public.devices where id = cel), 'celular da Bia na lista';
+  begin
+    perform public.set_device_blocked(tg, cel, true);
+    raise exception 'gerente não deveria bloquear aparelho';
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
+  perform public.set_device_blocked(ta, cel, true);
+  perform public.set_device_blocked(ta, balcao, true);
+  select * into r from public.operator_login((select v::uuid from ctx where k = 'ea'), '3333', 'chave-balcao', 'Chrome no Windows');
+  assert r.token is null and r.name = 'Este aparelho foi bloqueado pelo dono.', 'balcão bloqueado';
+  assert exists (select 1 from public.audit_log where action = 'aparelho.bloquear' and summary like 'Aparelho Chrome no Android (celular de Bia) bloqueado por Dono A'), 'bloqueio no histórico';
+  -- outro aparelho da mesma conta continua funcionando
+  select * into r from public.operator_login((select v::uuid from ctx where k = 'ea'), '3333', 'chave-cozinha', 'Chrome no Android');
+  assert r.token is not null, 'outro aparelho da conta segue liberado';
+  perform public.set_device_blocked(ta, balcao, false);
+end $$;
+
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');
+do $$
+begin
+  assert (select count(*) from public.establishments) = 0, 'celular bloqueado não vê mais nada';
+  assert (select count(*) from public.orders) = 0, 'celular bloqueado não vê pedidos';
+  raise notice 'OK convite por link: celular só da pessoa, uso único, e o dono vê e bloqueia aparelhos';
+end $$;
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');
 
 -- Materiais e ficha técnica: só o dono
 do $$

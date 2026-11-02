@@ -8,6 +8,7 @@ import type { Customer, Establishment, FiadoSettlement, Order, OrderStatus, Paym
 import * as demo from './actions'
 import { isCloud, sb } from './backend'
 import { establishmentId, fetchOrdersBetween, friendly, scheduleReload, withTimeout } from './cloud'
+import { deviceInfo, deviceKey } from '../lib/device'
 import { clearOperator, currentUserId, operatorToken, setOperator } from './session'
 import { getDB } from './store'
 
@@ -54,11 +55,15 @@ export async function loginPin(pin: string): Promise<User> {
     setOperator(user.id, null)
     return user
   }
-  const { data, error } = await withTimeout(sb().rpc('operator_login', { p_establishment: establishmentId(), p_pin: pin }))
+  const { data, error } = await withTimeout(sb().rpc('operator_login', {
+    p_establishment: establishmentId(), p_pin: pin, p_device_key: deviceKey(), p_info: deviceInfo(),
+  }))
   if (error) throw new Error(friendly(error.message))
-  // PIN errado: o banco registra no histórico e devolve nenhuma linha
-  const row = (data as { token: string; staff_id: string; name: string; roles: User['roles'] }[])[0]
+  // PIN errado: o banco registra no histórico e devolve nenhuma linha.
+  // Recusa com motivo (aparelho bloqueado, celular de outra pessoa): linha sem token, motivo em name.
+  const row = (data as { token: string | null; staff_id: string; name: string; roles: User['roles'] }[])[0]
   if (!row) throw new Error('PIN não encontrado')
+  if (!row.token) throw new Error(row.name)
   setOperator(row.staff_id, row.token)
   return { id: row.staff_id, name: row.name, roles: row.roles, pin: '', deletedAt: null, phone: '', createdBy: null, blockedAt: null }
 }
@@ -173,6 +178,22 @@ export async function saveEstablishment(e: Establishment): Promise<void> {
 export async function saveUser(u: UserInput): Promise<void> {
   if (!isCloud) return demo.saveUser(uid(), u)
   await rpc('save_staff', { p_id: u.id ?? null, p_name: u.name, p_phone: u.phone, p_pin: u.pin ? u.pin : null, p_roles: u.roles })
+}
+
+/**
+ * Gera o link de acesso (uso único, 24 h) para mandar pelo WhatsApp da pessoa.
+ * Dono: para qualquer perfil; gerente: só para atendente. Só existe no modo nuvem.
+ */
+export async function createInvite(staffId: string): Promise<string> {
+  if (!isCloud) throw new Error('O link de acesso funciona na versão publicada (nuvem). No modo demonstração, todos usam este aparelho.')
+  const code = await rpc<string>('create_invite', { p_staff: staffId })
+  return `${location.origin}/convite/${code}`
+}
+
+/** Só o dono. Aparelho bloqueado não entra mais (o de convite deixa de ver os dados). */
+export async function setDeviceBlocked(id: string, blocked: boolean): Promise<void> {
+  if (!isCloud) throw new Error('Aparelhos só existem no modo nuvem.')
+  await rpc('set_device_blocked', { p_device: id, p_blocked: blocked })
 }
 
 /** Só o dono. Perfil bloqueado não entra com o PIN nem autoriza nada. */
