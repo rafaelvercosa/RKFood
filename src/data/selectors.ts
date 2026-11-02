@@ -31,6 +31,30 @@ export function needsKitchen(order: Order): boolean {
 
 export const KITCHEN_STATUSES: OrderStatus[] = ['novo', 'preparo', 'pronto']
 
+/**
+ * Quando o pedido chegou na cozinha: a primeira vez que ficou "novo".
+ * Com cobrança antes, isso é quando foi pago, não quando foi criado.
+ */
+export function kitchenSentAt(order: Order): string {
+  return order.statusHistory.find((h) => h.status === 'novo')?.at ?? order.createdAt
+}
+
+/** Quando ficou pronto pela última vez (ou null se ainda não ficou). */
+export function kitchenReadyAt(order: Order): string | null {
+  return [...order.statusHistory].reverse().find((h) => h.status === 'pronto')?.at ?? null
+}
+
+/** Segundos na cozinha: até agora, ou até ficar pronto. */
+export function kitchenSeconds(order: Order, now: number): number {
+  const end = order.status === 'pronto' ? new Date(kitchenReadyAt(order) ?? now).getTime() : now
+  return Math.max(0, Math.floor((end - new Date(kitchenSentAt(order)).getTime()) / 1000))
+}
+
+/** Pedido ainda na fila (novo ou em preparo) que passou do tempo estimado. */
+export function isKitchenLate(order: Order, targetMin: number, now: number): boolean {
+  return (order.status === 'novo' || order.status === 'preparo') && kitchenSeconds(order, now) >= targetMin * 60
+}
+
 // ---------------------------------------------------------------- Fiado
 
 /** Saldo devedor do cliente em centavos (positivo = cliente deve). */

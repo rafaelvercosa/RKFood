@@ -12,7 +12,7 @@ export function emptyDatabase(): Database {
     version: DB_VERSION,
     establishment: {
       id: '', name: 'RKFood', slogan: '', logoUrl: null, coverUrl: null, brandColor: '#e4572e',
-      paymentTiming: 'depois', phone: '', address: '', pixKey: '',
+      paymentTiming: 'depois', phone: '', address: '', pixKey: '', kitchenTargetMin: 15,
     },
     users: [], categories: [], products: [], orders: [], payments: [], customers: [], settlements: [], audit: [],
   }
@@ -43,6 +43,7 @@ export function seedDatabase(): Database {
       phone: '',
       address: '',
       pixKey: '',
+      kitchenTargetMin: 15,
     },
     users: [
       user('Dono', '1234', ['gerente', 'caixa', 'atendente', 'cozinha']),

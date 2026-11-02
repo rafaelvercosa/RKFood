@@ -25,7 +25,10 @@ function load(): Database {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Database
-      if (parsed.version === DB_VERSION) return parsed
+      if (parsed.version === DB_VERSION) {
+        parsed.establishment.kitchenTargetMin ??= 15 // demonstração salva antes do tempo estimado
+        return parsed
+      }
     }
   } catch {
     // dado corrompido ou storage bloqueado: recomeça com a demonstração

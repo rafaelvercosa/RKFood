@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Header } from '../components/Layout'
 import { attempt, Segmented, useNow } from '../components/ui'
 import { setOrderStatus } from '../data/api'
-import { identLabel, KITCHEN_STATUSES, modeLabel, needsKitchen } from '../data/selectors'
+import { identLabel, isKitchenLate, KITCHEN_STATUSES, kitchenReadyAt, kitchenSeconds, kitchenSentAt, modeLabel, needsKitchen } from '../data/selectors'
 import { useDB } from '../data/store'
 import { beep } from '../lib/beep'
-import { hhmm, minutesSince } from '../lib/dates'
+import { hhmm } from '../lib/dates'
 import { escapeHtml, printHtml } from '../lib/print'
 import type { Establishment, Order } from '../types'
 
@@ -15,10 +15,9 @@ interface KitchenPrefs {
   sound: boolean
   autoPrint: boolean
   paperMm: 58 | 80
-  lateMin: number
 }
 const PREFS_KEY = 'rkfood:cozinha'
-const DEFAULT_PREFS: KitchenPrefs = { tv: false, sound: true, autoPrint: false, paperMm: 80, lateMin: 15 }
+const DEFAULT_PREFS: KitchenPrefs = { tv: false, sound: true, autoPrint: false, paperMm: 80 }
 
 function loadPrefs(): KitchenPrefs {
   try {
@@ -30,7 +29,8 @@ function loadPrefs(): KitchenPrefs {
 
 export default function Cozinha() {
   const db = useDB()
-  const now = useNow(15000)
+  const now = useNow(1000)
+  const targetMin = db.establishment.kitchenTargetMin
   const [prefs, setPrefsState] = useState<KitchenPrefs>(loadPrefs)
   const [showSettings, setShowSettings] = useState(false)
   const [filter, setFilter] = useState<'fila' | 'prontos'>('fila')
@@ -42,11 +42,14 @@ export default function Cozinha() {
 
   const active = db.orders
     .filter((o) => KITCHEN_STATUSES.includes(o.status) && needsKitchen(o))
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .sort((a, b) => kitchenSentAt(a).localeCompare(kitchenSentAt(b)))
+  // fila na ordem em que chegou na cozinha; prontos do mais recente para o mais antigo
   const queue = active.filter((o) => o.status !== 'pronto')
-  const ready = active.filter((o) => o.status === 'pronto')
+  const ready = active.filter((o) => o.status === 'pronto').sort((a, b) => (kitchenReadyAt(b) ?? '').localeCompare(kitchenReadyAt(a) ?? ''))
+  const late = queue.filter((o) => isKitchenLate(o, targetMin, now))
 
   useNewOrderAlert(queue, prefs, db.establishment)
+  useLateAlert(late, prefs)
 
   const shown = filter === 'fila' ? queue : ready
 
@@ -67,11 +70,15 @@ export default function Cozinha() {
               <span>Papel da impressora:</span>
               <Segmented value={String(prefs.paperMm) as '58' | '80'} onChange={(v) => setPrefs({ paperMm: Number(v) as 58 | 80 })} options={[{ value: '58', label: '58 mm' }, { value: '80', label: '80 mm' }]} />
             </div>
-            <label className="field" style={{ maxWidth: 260 }}>Destacar pedido atrasado após (min)
-              <input type="number" min={1} value={prefs.lateMin} onChange={(e) => setPrefs({ lateMin: Math.max(1, Number(e.target.value) || 15) })} />
-            </label>
+            <p className="muted small">Tempo estimado de preparo: <b>{targetMin} min</b>. Quem muda é o gerente, em Gerência → Estabelecimento.</p>
             <p className="muted small">Dica: para o som e a impressão automática funcionarem, toque uma vez na tela depois de abrir. Em TV, use o navegador em tela cheia.</p>
             <button onClick={() => document.documentElement.requestFullscreen?.()}>Tela cheia</button>
+          </div>
+        )}
+
+        {late.length > 0 && (
+          <div className="late-banner" role="alert">
+            ⚠ {late.length === 1 ? '1 pedido atrasado' : `${late.length} pedidos atrasados`}: nº {late.map((o) => o.number).join(', nº ')}
           </div>
         )}
 
@@ -81,19 +88,22 @@ export default function Cozinha() {
           <div className="card empty">{filter === 'fila' ? 'Nenhum pedido na fila. 🔥' : 'Nenhum pedido aguardando entrega.'}</div>
         ) : (
           <div className="kds">
-            {shown.map((o) => {
-              const mins = minutesSince(o.createdAt, now)
-              const late = o.status !== 'pronto' && mins >= prefs.lateMin
+            {shown.map((o, idx) => {
+              const isLate = isKitchenLate(o, targetMin, now)
               return (
-                <article key={o.id} className={`card comanda ticket ${o.status} ${late ? 'late' : ''}`}>
+                <article key={o.id} className={`card comanda ticket ${o.status} ${isLate ? 'late' : ''}`}>
                   <div className="row between">
                     <span className="num">nº {o.number}</span>
-                    <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
+                    <span className="row" style={{ gap: 6 }}>
+                      {filter === 'fila' && <span className="queue-pos" title="Ordem de chegada na cozinha">{idx + 1}º</span>}
+                      <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
+                    </span>
                   </div>
                   <div className="row between">
                     <strong>{identLabel(o)}</strong>
-                    <span className={late ? 'error-text' : 'muted'}>{hhmm(o.createdAt)} · {mins} min</span>
+                    <span className="muted">chegou {hhmm(kitchenSentAt(o))}</span>
                   </div>
+                  <KitchenTimer order={o} targetMin={targetMin} now={now} />
                   <ul>
                     {o.items.filter((i) => i.sendToKitchen).map((i) => (
                       <li key={i.id}>
@@ -123,6 +133,43 @@ export default function Cozinha() {
       </main>
     </div>
   )
+}
+
+/** Cronômetro da comanda: tempo desde que chegou na cozinha, contra o tempo estimado. */
+function KitchenTimer({ order, targetMin, now }: { order: Order; targetMin: number; now: number }) {
+  const secs = kitchenSeconds(order, now)
+  const target = targetMin * 60
+  if (order.status === 'pronto') {
+    return <div className={`timer ${secs > target ? 'atrasado' : 'ok'}`}><span className="timer-text">Pronto em {clock(secs)}</span></div>
+  }
+  const state = secs >= target ? 'atrasado' : secs >= target * 0.75 ? 'quase' : 'ok'
+  return (
+    <div className={`timer ${state}`}>
+      <div className="row between">
+        <span className="timer-clock" aria-label={`${Math.floor(secs / 60)} minutos na cozinha`}>{clock(secs)}</span>
+        <span className="timer-text">
+          {state === 'atrasado' ? `Atrasado +${Math.floor((secs - target) / 60)} min` : `de ${targetMin} min`}
+        </span>
+      </div>
+      <div className="timer-bar" aria-hidden><span style={{ width: `${Math.min(100, (secs / target) * 100)}%` }} /></div>
+    </div>
+  )
+}
+
+/** 75 segundos -> "1:15"; 3725 -> "62:05". */
+function clock(secs: number): string {
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
+}
+
+/** Toca um aviso quando um pedido passa do tempo estimado (uma vez por pedido). */
+function useLateAlert(late: Order[], prefs: KitchenPrefs): void {
+  const warned = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    const ids = late.map((o) => o.id)
+    // ao abrir a tela, os já atrasados não tocam: só os que atrasarem daqui em diante
+    if (warned.current && prefs.sound && ids.some((id) => !warned.current!.has(id))) beep(3)
+    warned.current = new Set([...(warned.current ?? []), ...ids])
+  }, [late, prefs.sound])
 }
 
 /** Aviso sonoro e impressão automática quando chega pedido novo na fila. */

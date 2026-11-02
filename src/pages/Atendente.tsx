@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Header } from '../components/Layout'
 import { attempt, Modal, Photo, Segmented, toast, useNow } from '../components/ui'
 import { createOrder, setOrderStatus } from '../data/api'
-import { identLabel, isOrderPaid, modeLabel, orderTotal } from '../data/selectors'
+import { identLabel, isKitchenLate, isOrderPaid, modeLabel, orderTotal } from '../data/selectors'
 import { useDB } from '../data/store'
 import { beep } from '../lib/beep'
 import { hhmm, minutesSince, today } from '../lib/dates'
@@ -230,6 +230,7 @@ function OrdersToday() {
               <div className="stack" style={{ justifyItems: 'end', gap: 4 }}>
                 <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
                 <span className={`badge ${o.status}`}>{STATUS_LABEL[o.status]}</span>
+                {isKitchenLate(o, db.establishment.kitchenTargetMin, now) && <span className="badge atrasado">Atrasado</span>}
                 {o.status !== 'cancelado' && <PaidBadge order={o} />}
               </div>
             </div>

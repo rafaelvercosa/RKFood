@@ -60,6 +60,16 @@ export default function EstabelecimentoForm() {
               : 'O pedido vai direto para a cozinha; o caixa recebe quando o cliente for embora.'}
           </p>
         </div>
+        <label className="field" style={{ maxWidth: 260 }}>Tempo estimado de preparo (minutos)
+          <input
+            type="number" inputMode="numeric" min={1} max={180}
+            value={form.kitchenTargetMin || ''}
+            onChange={(e) => set({ kitchenTargetMin: Math.round(Number(e.target.value)) || 0 })}
+          />
+        </label>
+        <p className="muted small">
+          A cozinha mostra um cronômetro em cada comanda. Passou desse tempo, o pedido fica vermelho e toca um aviso.
+        </p>
       </div>
 
       <div className="card stack">

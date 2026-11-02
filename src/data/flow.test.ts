@@ -156,3 +156,41 @@ describe('lixeira e histórico', () => {
     expect(() => actions.saveUser(ctx.owner.id, { name: 'Novo', pin: '123456', roles: ['caixa'] })).toThrow('PIN')
   })
 })
+
+describe('tempo de preparo', () => {
+  const base = { id: 'x', items: [], createdAt: '2026-11-03T12:00:00.000Z' }
+  const at = (min: number) => new Date(Date.parse('2026-11-03T12:00:00.000Z') + min * 60000).toISOString()
+  const ms = (min: number) => Date.parse(at(min))
+
+  it('conta a partir da chegada na cozinha, não da criação (cobrança antes)', () => {
+    const o = {
+      ...base, status: 'preparo',
+      statusHistory: [
+        { status: 'aguardando_pagamento', at: at(0), by: 'u' },
+        { status: 'novo', at: at(10), by: 'u' },
+        { status: 'preparo', at: at(12), by: 'u' },
+      ],
+    } as unknown as Parameters<typeof sel.kitchenSentAt>[0]
+    expect(sel.kitchenSentAt(o)).toBe(at(10))
+    expect(sel.kitchenSeconds(o, ms(25))).toBe(15 * 60)
+    expect(sel.isKitchenLate(o, 15, ms(24))).toBe(false)
+    expect(sel.isKitchenLate(o, 15, ms(25))).toBe(true)
+  })
+
+  it('pedido pronto para o cronômetro e não conta como atrasado', () => {
+    const o = {
+      ...base, status: 'pronto',
+      statusHistory: [{ status: 'novo', at: at(0), by: 'u' }, { status: 'pronto', at: at(20), by: 'u' }],
+    } as unknown as Parameters<typeof sel.kitchenSentAt>[0]
+    expect(sel.kitchenSeconds(o, ms(90))).toBe(20 * 60)
+    expect(sel.isKitchenLate(o, 15, ms(90))).toBe(false)
+  })
+
+  it('o gerente não salva tempo estimado inválido', () => {
+    const { owner } = setup()
+    const est = getDB().establishment
+    expect(() => actions.saveEstablishment(owner.id, { ...est, kitchenTargetMin: 0 })).toThrow('1 a 180')
+    actions.saveEstablishment(owner.id, { ...est, kitchenTargetMin: 20 })
+    expect(getDB().establishment.kitchenTargetMin).toBe(20)
+  })
+})

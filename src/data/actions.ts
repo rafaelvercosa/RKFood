@@ -257,6 +257,9 @@ export function restoreFromTrash(userId: string, kind: Trashable, id: string): v
 
 export function saveEstablishment(userId: string, e: Establishment): void {
   if (!e.name.trim()) throw new Error('Informe o nome do estabelecimento')
+  if (!Number.isInteger(e.kitchenTargetMin) || e.kitchenTargetMin < 1 || e.kitchenTargetMin > 180) {
+    throw new Error('O tempo estimado deve ser de 1 a 180 minutos')
+  }
   commit(userId, 'estabelecimento.editar', (d) => {
     d.establishment = { ...e, name: e.name.trim() }
     return 'Dados do estabelecimento atualizados'

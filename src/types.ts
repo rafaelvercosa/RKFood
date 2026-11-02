@@ -26,6 +26,8 @@ export interface Establishment {
   address: string
   /** Pix copia-e-cola ou chave Pix, exibida no extrato do fiado. */
   pixKey: string
+  /** Em quantos minutos um pedido deve ficar pronto (cronômetro e alerta da cozinha). */
+  kitchenTargetMin: number
 }
 
 export interface User {
