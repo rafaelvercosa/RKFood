@@ -46,6 +46,10 @@
   limite e recebimento parcial, relatório do dia, histórico e upload de foto. Tudo funcionou, inclusive o
   embed com FKs compostas, o filtro `.or(...)`, o Realtime com RLS e as políticas do Storage. O único bug
   encontrado foi um laço nas abas da Gerência (link relativo no React Router 7), já corrigido.
+- **Visual "placa de barraca" (02/11/2026)**: fontes Big Shoulders Display (números, preços, títulos) e
+  Atkinson Hyperlegible (texto), embutidas via Fontsource; cores em `src/index.css` (fumaça, carvão, milho,
+  lona azul, folha; `--brand` vem do estabelecimento); pedidos como comanda picotada (`.comanda`).
+  Atendente com botões das mesas 1 a 10. Preview do modo demonstração: `rkfood-demo` (porta 5174, PIN 1234).
 - Ficaram dados de teste no banco: pedido nº 1 (mesa 5) e o cliente "Cliente Teste" com R$ 10 de fiado.
 - Ainda não testado na nuvem: cobrança `antes`, cancelamento de pedido, extrato em PDF/WhatsApp e dois
   aparelhos físicos diferentes.
