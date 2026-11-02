@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { saveCustomer } from '../data/actions'
-import { currentUserId } from '../data/session'
+import { saveCustomer } from '../data/api'
 import { centsToInput, parseBRL } from '../lib/money'
 import type { Customer } from '../types'
 import { attempt, Modal } from './ui'
@@ -16,10 +15,10 @@ export function CustomerForm({ customer, initialName = '', onClose, onSaved }: {
   const [notes, setNotes] = useState(customer?.notes ?? '')
   const [limit, setLimit] = useState(customer?.creditLimit ? centsToInput(customer.creditLimit) : '')
 
-  function save() {
+  async function save() {
     let saved: Customer | null = null
-    const ok = attempt(() => {
-      saved = saveCustomer(currentUserId(), { id: customer?.id, name, phone, notes, creditLimit: parseBRL(limit) })
+    const ok = await attempt(async () => {
+      saved = await saveCustomer({ id: customer?.id, name, phone, notes, creditLimit: parseBRL(limit) })
     }, 'Cliente salvo')
     if (ok && saved) {
       onSaved?.(saved)

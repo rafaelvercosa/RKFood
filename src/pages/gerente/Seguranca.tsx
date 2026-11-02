@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { attempt } from '../../components/ui'
-import { restoreFromTrash, type Trashable } from '../../data/actions'
-import { currentUserId } from '../../data/session'
+import { restoreFromTrash, type Trashable } from '../../data/api'
+import { isCloud } from '../../data/backend'
+import { signOutDevice } from '../../data/cloud'
 import { resetDemo, useDB } from '../../data/store'
 import { dateTimeBR } from '../../lib/dates'
 
@@ -28,7 +29,7 @@ export default function Seguranca() {
               <strong>{t.name}</strong> <span className="badge">{KIND_LABEL[t.kind]}</span>
               <div className="muted small">Excluído em {dateTimeBR(t.deletedAt)}</div>
             </div>
-            <button className="btn-sm" onClick={() => attempt(() => restoreFromTrash(currentUserId(), t.kind, t.id), 'Restaurado')}>Restaurar</button>
+            <button className="btn-sm" onClick={() => attempt(() => restoreFromTrash(t.kind, t.id), 'Restaurado')}>Restaurar</button>
           </div>
         ))}
       </section>
@@ -48,13 +49,23 @@ export default function Seguranca() {
         {db.audit.length > limit && <button onClick={() => setLimit((l) => l + 100)}>Ver mais</button>}
       </section>
 
-      <section className="card stack">
-        <h3>Modo demonstração</h3>
-        <p className="muted small">Os dados estão salvos apenas neste navegador. Quando o banco na nuvem for conectado, eles passam a ficar no servidor com backup automático.</p>
-        <button className="btn-danger" style={{ justifySelf: 'start' }} onClick={() => {
-          if (confirm('Apagar todos os dados de demonstração e começar de novo?')) resetDemo()
-        }}>Recomeçar demonstração</button>
-      </section>
+      {isCloud ? (
+        <section className="card stack">
+          <h3>Este aparelho</h3>
+          <p className="muted small">Os dados ficam na nuvem, com backup. Desconecte quando o aparelho não for mais usado no estabelecimento (ex.: celular perdido ou de funcionário que saiu).</p>
+          <button className="btn-danger" style={{ justifySelf: 'start' }} onClick={() => {
+            if (confirm('Desconectar este aparelho? Será preciso entrar de novo com o e-mail e a senha do estabelecimento.')) void signOutDevice()
+          }}>Desconectar aparelho</button>
+        </section>
+      ) : (
+        <section className="card stack">
+          <h3>Modo demonstração</h3>
+          <p className="muted small">Os dados estão salvos apenas neste navegador. Quando o banco na nuvem for conectado, eles passam a ficar no servidor com backup automático.</p>
+          <button className="btn-danger" style={{ justifySelf: 'start' }} onClick={() => {
+            if (confirm('Apagar todos os dados de demonstração e começar de novo?')) resetDemo()
+          }}>Recomeçar demonstração</button>
+        </section>
+      )}
     </div>
   )
 }

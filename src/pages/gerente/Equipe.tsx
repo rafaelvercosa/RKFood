@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { attempt, Modal } from '../../components/ui'
-import { moveToTrash, saveUser, type UserInput } from '../../data/actions'
-import { currentUserId } from '../../data/session'
+import { moveToTrash, saveUser, type UserInput } from '../../data/api'
+import { isCloud } from '../../data/backend'
 import { useDB } from '../../data/store'
 import { ROLE_LABEL, type Role, type User } from '../../types'
 
@@ -42,8 +42,9 @@ function UserForm({ user, onClose }: { user: User | null; onClose: () => void })
   return (
     <Modal title={user ? 'Editar usuário' : 'Novo usuário'} onClose={onClose}>
       <label className="field">Nome *<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-      <label className="field">PIN (4 a 6 números) *
-        <input inputMode="numeric" maxLength={6} value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })} />
+      <label className="field">PIN (4 a 6 números){user && isCloud ? '' : ' *'}
+        <input inputMode="numeric" maxLength={6} value={form.pin} placeholder={user && isCloud ? 'Deixe em branco para manter o PIN atual' : ''}
+          onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })} />
       </label>
       <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
         <legend className="small" style={{ fontWeight: 600, marginBottom: 6 }}>Perfis</legend>
@@ -54,9 +55,9 @@ function UserForm({ user, onClose }: { user: User | null; onClose: () => void })
           </label>
         ))}
       </fieldset>
-      <button className="btn-primary btn-lg" onClick={() => attempt(() => saveUser(currentUserId(), form), 'Usuário salvo') && onClose()}>Salvar</button>
+      <button className="btn-primary btn-lg" onClick={() => attempt(() => saveUser(form), 'Usuário salvo').then((ok) => ok && onClose())}>Salvar</button>
       {user && (
-        <button className="btn-danger" onClick={() => attempt(() => moveToTrash(currentUserId(), 'users', user.id), 'Usuário movido para a lixeira') && onClose()}>
+        <button className="btn-danger" onClick={() => attempt(() => moveToTrash('users', user.id), 'Usuário movido para a lixeira').then((ok) => ok && onClose())}>
           Excluir usuário
         </button>
       )}

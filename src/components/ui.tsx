@@ -15,15 +15,25 @@ export function toastError(e: unknown): void {
   pushToast?.({ text, error: true, id: ++seq })
 }
 
-/** Executa uma ação e mostra o erro (se houver) num aviso. Devolve true se deu certo. */
-export function attempt(fn: () => void, okText?: string): boolean {
+let busy = false
+
+/**
+ * Executa uma ação (pode ser assíncrona, ex.: gravar na nuvem), mostra o erro
+ * num aviso se houver, e devolve true se deu certo. Ignora toques repetidos
+ * enquanto a ação anterior ainda está em andamento (evita pedido duplicado).
+ */
+export async function attempt(fn: () => unknown, okText?: string): Promise<boolean> {
+  if (busy) return false
+  busy = true
   try {
-    fn()
+    await fn()
     if (okText) toast(okText)
     return true
   } catch (e) {
     toastError(e)
     return false
+  } finally {
+    busy = false
   }
 }
 

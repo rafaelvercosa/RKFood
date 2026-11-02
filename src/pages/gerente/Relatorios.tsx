@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { isCloud } from '../../data/backend'
+import { ensureDate } from '../../data/cloud'
 import { dailySummary } from '../../data/selectors'
 import { useDB } from '../../data/store'
 import { businessDateBR, dateTimeBR, nowIso, today } from '../../lib/dates'
@@ -8,6 +10,9 @@ import { METHOD_LABEL, type PaymentMethod } from '../../types'
 
 export default function Relatorios() {
   const [date, setDate] = useState(today())
+  useEffect(() => {
+    if (isCloud) void ensureDate(date)
+  }, [date])
   return (
     <div className="stack">
       <label className="field" style={{ maxWidth: 240 }}>Dia

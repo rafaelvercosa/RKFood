@@ -3,8 +3,9 @@
 Sistema de **pedidos, cozinha, caixa e fiado** para espetinhos, carrocinhas e pequenas lanchonetes.
 Funciona no navegador do celular, tablet ou TV e pode ser instalado na tela inicial como aplicativo (PWA).
 
-> **Status:** versão 0.1, em **modo demonstração**: os dados ficam no navegador.
-> A próxima etapa conecta o banco na nuvem (Supabase), com vários estabelecimentos e backup automático.
+> **Status:** versão 0.2. Funciona em **modo nuvem** (Supabase: vários estabelecimentos, tempo real entre aparelhos)
+> ou em **modo demonstração** (sem configuração, dados só no navegador).
+> Implantação: [docs/implantacao.md](docs/implantacao.md).
 
 ## Funcionalidades
 
@@ -31,6 +32,8 @@ npm test         # testes automatizados
 npm run build    # versão de produção em dist/
 ```
 
+Sem o arquivo `.env.local` o app abre em **modo demonstração**. Para usar o Supabase, veja [docs/implantacao.md](docs/implantacao.md).
+
 No modo demonstração, entre com um destes PINs:
 
 | Usuário | PIN | Perfis |
@@ -47,19 +50,26 @@ No modo demonstração, entre com um destes PINs:
 - **React 19 + TypeScript + Vite**, PWA (manifest e service worker)
 - **React Router** para as telas por perfil
 - **Vitest** para os testes de regras de negócio
-- Próxima etapa: **Supabase** (Postgres, autenticação, tempo real e armazenamento de fotos) e **Vercel** (hospedagem)
+- **Supabase**: Postgres com RLS multi-empresa, funções (RPC) com as regras de negócio, Auth, Realtime e Storage para fotos
+- **Vercel** para hospedagem
 
 ```
 src/
 ├── types.ts            modelo de dados
 ├── data/
-│   ├── store.ts        armazenamento (demo: navegador → depois: Supabase)
-│   ├── actions.ts      tudo que altera dados (validações, histórico)
+│   ├── api.ts          ponto único de escrita (demo ou Supabase)
+│   ├── cloud.ts        modo nuvem: login do aparelho, carga de dados, tempo real
+│   ├── store.ts        "foto" dos dados que as telas leem
+│   ├── actions.ts      regras do modo demonstração
 │   ├── selectors.ts    cálculos: totais, saldo de fiado, relatórios
 │   └── flow.test.ts    testes do fluxo completo
 ├── pages/              telas: Atendente, Cozinha, Caixa, Fiado, Gerente…
 ├── components/         componentes reutilizáveis
 └── lib/                dinheiro, datas, impressão, fotos, som
+supabase/
+├── migrations/         esquema, segurança (RLS) e funções do banco
+├── instalar_tudo.sql   tudo junto, para colar no SQL Editor
+└── tests/              testes do banco (isolamento, perfis, regras)
 ```
 
 Mais detalhes em [docs/arquitetura.md](docs/arquitetura.md).
@@ -67,7 +77,8 @@ Mais detalhes em [docs/arquitetura.md](docs/arquitetura.md).
 ## Roteiro
 
 - [x] **Etapa 1:** pedido, cozinha, caixa, fiado, cardápio com fotos, personalização (modo demo)
-- [ ] **Etapa 2:** Supabase multi-empresa, login real, tempo real entre aparelhos, deploy na Vercel
+- [x] **Etapa 2:** Supabase multi-empresa, login do aparelho + PIN do operador, tempo real, fotos no Storage
+- [ ] Publicar na Vercel e validar com um estabelecimento real
 - [ ] **Etapa 3:** backups automáticos (Google Drive + segundo local) e painel do administrador da plataforma
 - [ ] **Etapa 4:** ficha técnica, consumo de material e lista de compras
 - [ ] **Etapa 5:** relatórios por período, gráficos e exportação para planilha

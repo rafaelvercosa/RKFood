@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useDB } from '../data/store'
-import { hasRole, logout, useCurrentUser } from '../data/session'
+import { logoutOperator as logout } from '../data/api'
+import { hasRole, useCurrentUser } from '../data/session'
 import type { Role } from '../types'
 
 const AREAS: { role: Role; to: string; ico: string; label: string; desc: string }[] = [
@@ -33,7 +34,7 @@ export default function Home() {
                 <div className="muted small">Olá,</div>
                 <h2>{user.name}</h2>
               </div>
-              <button onClick={logout}>Trocar usuário</button>
+              <button onClick={() => void logout()}>Trocar usuário</button>
             </div>
             <div className="role-grid">
               {AREAS.filter((a) => hasRole(user, a.role)).map((a) => (

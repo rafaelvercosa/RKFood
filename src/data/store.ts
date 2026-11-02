@@ -1,21 +1,23 @@
-// Armazenamento do MODO DEMONSTRAÇÃO.
+// "Foto" atual dos dados que as telas leem com `useDB()`.
 //
-// Enquanto o Supabase não está conectado, os dados ficam no próprio navegador
-// (localStorage). Abas abertas no mesmo aparelho se sincronizam sozinhas — dá
-// para abrir "Atendente" numa aba e "Cozinha" em outra e ver o pedido chegar.
+// MODO DEMONSTRAÇÃO (sem Supabase configurado): os dados ficam no próprio
+// navegador (localStorage) e as abas do mesmo aparelho se sincronizam sozinhas.
 //
-// Todas as telas usam apenas `useDB()` (leitura) e as funções de actions.ts
-// (escrita). Na etapa do Supabase só esta camada muda; as telas continuam iguais.
+// MODO NUVEM: cloud.ts busca os dados no Supabase e chama `setSnapshot()` sempre
+// que algo muda (tempo real). Nada é salvo no navegador.
+//
+// As telas leem com `useDB()` e escrevem pelas funções de api.ts.
 
 import { useSyncExternalStore } from 'react'
 import { newId } from '../lib/id'
 import { nowIso } from '../lib/dates'
 import type { Database } from '../types'
-import { DB_VERSION, seedDatabase } from './seed'
+import { isCloud } from './backend'
+import { DB_VERSION, emptyDatabase, seedDatabase } from './seed'
 
 const KEY = 'rkfood:db'
 
-let db: Database = load()
+let db: Database = isCloud ? emptyDatabase() : load()
 const listeners = new Set<() => void>()
 
 function load(): Database {
@@ -48,7 +50,7 @@ function notify(): void {
 }
 
 // Sincroniza entre abas do mesmo navegador.
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && !isCloud) {
   window.addEventListener('storage', (e) => {
     if (e.key === KEY && e.newValue) {
       db = JSON.parse(e.newValue) as Database
@@ -72,6 +74,12 @@ export function commit(userId: string, action: string, mutate: (draft: Database)
   if (draft.audit.length > 2000) draft.audit.length = 2000
   persist(draft)
   db = draft
+  notify()
+}
+
+/** Modo nuvem: troca a foto dos dados sem gravar no navegador. */
+export function setSnapshot(next: Database): void {
+  db = next
   notify()
 }
 

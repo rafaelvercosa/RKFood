@@ -1,6 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { RequireRole, useBrandColor } from './components/Layout'
 import { ToastHost } from './components/ui'
+import { isCloud } from './data/backend'
+import { startCloud, useCloud } from './data/cloud'
+import ConectarAparelho from './pages/ConectarAparelho'
 import Atendente from './pages/Atendente'
 import Caixa from './pages/Caixa'
 import Cozinha from './pages/Cozinha'
@@ -9,8 +12,19 @@ import Gerente from './pages/Gerente'
 import Home from './pages/Home'
 import Login from './pages/Login'
 
+if (isCloud) startCloud()
+
 export default function App() {
   useBrandColor()
+  const cloud = useCloud()
+  if (isCloud && cloud.phase !== 'pronto') {
+    return (
+      <>
+        <ConectarAparelho />
+        <ToastHost />
+      </>
+    )
+  }
   return (
     <BrowserRouter>
       <Routes>

@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Header } from '../components/Layout'
 import { attempt, Modal, Photo, Segmented, toast, useNow } from '../components/ui'
-import { createOrder, setOrderStatus } from '../data/actions'
+import { createOrder, setOrderStatus } from '../data/api'
 import { identLabel, isOrderPaid, orderTotal } from '../data/selectors'
-import { currentUserId } from '../data/session'
 import { useDB } from '../data/store'
 import { beep } from '../lib/beep'
 import { hhmm, minutesSince, today } from '../lib/dates'
@@ -86,16 +85,15 @@ function NewOrder({ onSent }: { onSent: () => void }) {
   const update = (key: string, patch: Partial<CartLine>) =>
     setCart((c) => c.map((l) => (l.key === key ? { ...l, ...patch } : l)).filter((l) => l.qty > 0))
 
-  function send() {
-    const ok = attempt(() => {
-      createOrder(currentUserId(), {
+  async function send() {
+    const ok = await attempt(() =>
+      createOrder({
         identType, identValue, mode, notes,
         items: cart.map((l) => ({
           productId: l.product.id, name: l.product.name, unitPrice: l.product.price,
           qty: l.qty, notes: l.notes.trim(), sendToKitchen: l.product.sendToKitchen,
         })),
-      })
-    }, db.establishment.paymentTiming === 'antes' ? 'Pedido registrado. Aguardando pagamento no caixa.' : 'Pedido enviado para a cozinha!')
+      }), db.establishment.paymentTiming === 'antes' ? 'Pedido registrado. Aguardando pagamento no caixa.' : 'Pedido enviado para a cozinha!')
     if (ok) {
       setCart([]); setNotes(''); setIdentValue(''); setReviewing(false)
       onSent()
@@ -226,7 +224,7 @@ function OrdersToday() {
             <div className="row between">
               <span className="money"><b>{brl(orderTotal(o))}</b></span>
               {o.status === 'pronto' && (
-                <button className="btn-ok" onClick={() => attempt(() => setOrderStatus(currentUserId(), o.id, 'entregue'), 'Marcado como entregue')}>
+                <button className="btn-ok" onClick={() => attempt(() => setOrderStatus(o.id, 'entregue'), 'Marcado como entregue')}>
                   ✓ Entregue
                 </button>
               )}

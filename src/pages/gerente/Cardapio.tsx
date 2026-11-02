@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { attempt, Modal, Photo } from '../../components/ui'
-import { moveCategory, moveToTrash, saveCategory, saveProduct, type ProductInput } from '../../data/actions'
-import { currentUserId } from '../../data/session'
+import { moveCategory, moveToTrash, saveCategory, saveProduct, uploadImage, type ProductInput } from '../../data/api'
 import { useDB } from '../../data/store'
 import { resizeImage } from '../../lib/image'
 import { brl, centsToInput, parseBRL } from '../../lib/money'
@@ -12,7 +11,6 @@ export default function Cardapio() {
   const categories = db.categories.filter((c) => !c.deletedAt).sort((a, b) => a.sort - b.sort)
   const [editing, setEditing] = useState<Product | 'novo' | null>(null)
   const [editingCat, setEditingCat] = useState<Category | 'nova' | null>(null)
-  const uid = currentUserId()
 
   return (
     <div className="stack">
@@ -28,12 +26,12 @@ export default function Cardapio() {
             <div className="row between">
               <h3>{c.name} <span className="muted small">({items.length})</span></h3>
               <div className="row">
-                <button className="btn-sm icon-btn" disabled={ci === 0} onClick={() => attempt(() => moveCategory(uid, c.id, -1))} aria-label={`Subir ${c.name}`}>↑</button>
-                <button className="btn-sm icon-btn" disabled={ci === categories.length - 1} onClick={() => attempt(() => moveCategory(uid, c.id, 1))} aria-label={`Descer ${c.name}`}>↓</button>
+                <button className="btn-sm icon-btn" disabled={ci === 0} onClick={() => attempt(() => moveCategory(c.id, -1))} aria-label={`Subir ${c.name}`}>↑</button>
+                <button className="btn-sm icon-btn" disabled={ci === categories.length - 1} onClick={() => attempt(() => moveCategory(c.id, 1))} aria-label={`Descer ${c.name}`}>↓</button>
                 <button className="btn-sm" onClick={() => setEditingCat(c)}>Renomear</button>
                 <button className="btn-sm btn-danger" onClick={() => {
                   if (items.length) return attempt(() => { throw new Error('Mova ou exclua os itens desta categoria antes') })
-                  attempt(() => moveToTrash(uid, 'categories', c.id), 'Categoria movida para a lixeira')
+                  attempt(() => moveToTrash('categories', c.id), 'Categoria movida para a lixeira')
                 }}>Excluir</button>
               </div>
             </div>
@@ -63,7 +61,7 @@ function CategoryForm({ category, onClose }: { category: Category | null; onClos
   return (
     <Modal title={category ? 'Renomear categoria' : 'Nova categoria'} onClose={onClose}>
       <label className="field">Nome<input value={name} onChange={(e) => setName(e.target.value)} autoFocus /></label>
-      <button className="btn-primary btn-lg" onClick={() => attempt(() => saveCategory(currentUserId(), { id: category?.id, name }), 'Categoria salva') && onClose()}>Salvar</button>
+      <button className="btn-primary btn-lg" onClick={() => attempt(() => saveCategory({ id: category?.id, name }), 'Categoria salva').then((ok) => ok && onClose())}>Salvar</button>
     </Modal>
   )
 }
@@ -80,7 +78,7 @@ function ProductForm({ product, categories, onClose }: { product: Product | null
     if (!file) return
     setLoadingPhoto(true)
     try {
-      set({ photoUrl: await resizeImage(file) })
+      set({ photoUrl: await uploadImage(await resizeImage(file)) })
     } catch (e) {
       attempt(() => { throw e })
     } finally {
@@ -89,7 +87,7 @@ function ProductForm({ product, categories, onClose }: { product: Product | null
   }
 
   function save() {
-    if (attempt(() => saveProduct(currentUserId(), { ...form, price: parseBRL(price) }), 'Item salvo')) onClose()
+    void attempt(() => saveProduct({ ...form, price: parseBRL(price) }), 'Item salvo').then((ok) => ok && onClose())
   }
 
   return (
@@ -118,7 +116,7 @@ function ProductForm({ product, categories, onClose }: { product: Product | null
       <label className="check"><input type="checkbox" checked={form.sendToKitchen} onChange={(e) => set({ sendToKitchen: e.target.checked })} /> Passa pela cozinha (desmarque para bebidas prontas)</label>
       <button className="btn-primary btn-lg" onClick={save} disabled={loadingPhoto}>Salvar</button>
       {product && (
-        <button className="btn-danger" onClick={() => attempt(() => moveToTrash(currentUserId(), 'products', product.id), 'Item movido para a lixeira') && onClose()}>
+        <button className="btn-danger" onClick={() => attempt(() => moveToTrash('products', product.id), 'Item movido para a lixeira').then((ok) => ok && onClose())}>
           Excluir item
         </button>
       )}

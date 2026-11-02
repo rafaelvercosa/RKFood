@@ -6,6 +6,18 @@ import type { Category, Database, Product, User } from '../types'
 
 export const DB_VERSION = 1
 
+/** Banco vazio (usado no modo nuvem até os dados chegarem). */
+export function emptyDatabase(): Database {
+  return {
+    version: DB_VERSION,
+    establishment: {
+      id: '', name: 'RKFood', slogan: '', logoUrl: null, coverUrl: null, brandColor: '#c2410c',
+      paymentTiming: 'depois', phone: '', address: '', pixKey: '',
+    },
+    users: [], categories: [], products: [], orders: [], payments: [], customers: [], settlements: [], audit: [],
+  }
+}
+
 export function seedDatabase(): Database {
   const cat = (name: string, sort: number): Category => ({ id: newId(), name, sort, deletedAt: null })
   const espetos = cat('Espetinhos', 1)

@@ -16,14 +16,29 @@ Cada estabelecimento cliente é um *tenant*. Todas as tabelas têm a coluna `est
 **regras de segurança do banco (RLS)** garantem que um usuário só enxergue os dados do próprio estabelecimento.
 O administrador da plataforma cadastra estabelecimentos e ativa ou bloqueia o acesso.
 
+## Login: aparelho + operador
+
+1. **Aparelho:** cada celular, tablet ou TV entra **uma vez** com o e-mail e a senha do estabelecimento (Supabase Auth).
+   Essa conta é ligada ao estabelecimento pela tabela `members`.
+2. **Operador:** quem vai usar digita o **PIN** (4 a 6 números). O banco confere o PIN (guardado com hash bcrypt)
+   e devolve um **token de sessão** que vale 16 h.
+3. Toda alteração chama uma função do banco com esse token. A função confere se o token é válido,
+   se é do mesmo estabelecimento e se o perfil permite a ação. Depois grava e registra no histórico quem fez.
+
+As tabelas só aceitam **leitura** direta, e só do próprio estabelecimento (RLS).
+Inserir, alterar e excluir só acontece pelas funções, o que impede gravar dados inválidos
+mesmo que alguém mexa no app pelo navegador.
+
 ## Camada de dados
 
 As telas não sabem onde os dados ficam:
 - **leitura:** `useDB()` (store.ts)
 - **escrita:** funções de `actions.ts`, que validam, gravam e registram no histórico
 
-Hoje o `store.ts` grava no navegador (modo demo). Na etapa 2 ele passa a falar com o Supabase
-e as telas continuam iguais.
+- **modo demonstração:** `actions.ts` grava no navegador;
+- **modo nuvem:** `api.ts` chama as funções do Supabase e `cloud.ts` mantém os dados atualizados pelo Realtime.
+
+As telas são as mesmas nos dois modos.
 
 ## Fluxo do pedido
 

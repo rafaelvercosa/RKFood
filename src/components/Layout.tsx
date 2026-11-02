@@ -1,7 +1,8 @@
 import { useEffect, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useDB } from '../data/store'
-import { hasRole, logout, useCurrentUser } from '../data/session'
+import { logoutOperator as logout } from '../data/api'
+import { hasRole, useCurrentUser } from '../data/session'
 import type { Role } from '../types'
 
 /** Aplica a cor da marca do estabelecimento em todo o sistema. */
@@ -28,7 +29,7 @@ export function Header({ title, right }: { title: string; right?: ReactNode }) {
       </div>
       {right}
       {user && (
-        <button className="btn-ghost btn-sm" onClick={() => { logout(); nav('/') }}>Sair</button>
+        <button className="btn-ghost btn-sm" onClick={() => { void logout(); nav('/') }}>Sair</button>
       )}
     </header>
   )

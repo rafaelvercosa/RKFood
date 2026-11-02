@@ -3,9 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { CustomerForm } from '../components/CustomerForm'
 import { Header } from '../components/Layout'
 import { attempt, Modal, Segmented } from '../components/ui'
-import { moveToTrash, receiveFiado } from '../data/actions'
+import { moveToTrash, receiveFiado } from '../data/api'
 import { customerBalance, customersWithBalance, customerStatement, type StatementLine } from '../data/selectors'
-import { currentUserId } from '../data/session'
 import { useDB } from '../data/store'
 import { dateBR, dateTimeBR, hhmm, nowIso } from '../lib/dates'
 import { brl, centsToInput, parseBRL } from '../lib/money'
@@ -132,7 +131,7 @@ export function ClienteFiado() {
         </div>
 
         {balance === 0 && !customer.deletedAt && (
-          <button className="btn-danger btn-sm" style={{ justifySelf: 'start' }} onClick={() => attempt(() => moveToTrash(currentUserId(), 'customers', customer.id), 'Cliente movido para a lixeira')}>
+          <button className="btn-danger btn-sm" style={{ justifySelf: 'start' }} onClick={() => attempt(() => moveToTrash('customers', customer.id), 'Cliente movido para a lixeira')}>
             Excluir cliente
           </button>
         )}
@@ -166,7 +165,7 @@ function ReceiveModal({ customer, balance, onClose }: { customer: Customer; bala
       <label className="field">Valor recebido (R$)<input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></label>
       <label className="field">Observação<input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" /></label>
       {value > 0 && value < balance && <p className="muted">Pagamento parcial: continuará devendo <b className="money">{brl(balance - value)}</b>.</p>}
-      <button className="btn-ok btn-lg" disabled={value <= 0} onClick={() => attempt(() => receiveFiado(currentUserId(), customer.id, value, method, notes), 'Pagamento recebido') && onClose()}>
+      <button className="btn-ok btn-lg" disabled={value <= 0} onClick={() => attempt(() => receiveFiado(customer.id, value, method, notes), 'Pagamento recebido').then((ok) => ok && onClose())}>
         Confirmar {brl(value)}
       </button>
     </Modal>

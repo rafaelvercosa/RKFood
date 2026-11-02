@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { attempt, Segmented } from '../../components/ui'
-import { saveEstablishment } from '../../data/actions'
-import { currentUserId } from '../../data/session'
+import { saveEstablishment, uploadImage } from '../../data/api'
 import { useDB } from '../../data/store'
 import { resizeImage } from '../../lib/image'
 import type { Establishment } from '../../types'
@@ -14,7 +13,7 @@ export default function EstabelecimentoForm() {
   async function pick(field: 'logoUrl' | 'coverUrl', file: File | undefined) {
     if (!file) return
     try {
-      set({ [field]: await resizeImage(file, field === 'logoUrl' ? 320 : 1280, 0.82) })
+      set({ [field]: await uploadImage(await resizeImage(file, field === 'logoUrl' ? 320 : 1280, 0.82)) })
     } catch (e) {
       attempt(() => { throw e })
     }
@@ -70,7 +69,7 @@ export default function EstabelecimentoForm() {
         <label className="field">Chave Pix (aparece no extrato do fiado)<input value={form.pixKey} onChange={(e) => set({ pixKey: e.target.value })} /></label>
       </div>
 
-      <button className="btn-primary btn-lg" onClick={() => attempt(() => saveEstablishment(currentUserId(), form), 'Dados salvos')}>Salvar</button>
+      <button className="btn-primary btn-lg" onClick={() => attempt(() => saveEstablishment(form), 'Dados salvos')}>Salvar</button>
     </div>
   )
 }

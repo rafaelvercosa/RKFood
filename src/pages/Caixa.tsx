@@ -3,9 +3,8 @@ import { Link } from 'react-router-dom'
 import { CustomerForm } from '../components/CustomerForm'
 import { Header } from '../components/Layout'
 import { attempt, Modal, Segmented } from '../components/ui'
-import { cancelOrder, payOrder, setOrderStatus, type PaymentInput } from '../data/actions'
+import { cancelOrder, payOrder, setOrderStatus, type PaymentInput } from '../data/api'
 import { customerBalance, identLabel, orderPaid, orderPayments, orderRemaining, orderTotal } from '../data/selectors'
-import { currentUserId } from '../data/session'
 import { useDB } from '../data/store'
 import { businessDateBR, dateBR, hhmm, today } from '../lib/dates'
 import { brl, centsToInput, parseBRL } from '../lib/money'
@@ -103,7 +102,7 @@ function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }
       <div className="row">
         <button className="btn-sm" onClick={() => printReceipt(db, o)}>🖨️ Comprovante</button>
         {o.status === 'pronto' && (
-          <button className="btn-sm" onClick={() => attempt(() => setOrderStatus(currentUserId(), o.id, 'entregue'), 'Marcado como entregue')}>✓ Marcar entregue</button>
+          <button className="btn-sm" onClick={() => attempt(() => setOrderStatus(o.id, 'entregue'), 'Marcado como entregue')}>✓ Marcar entregue</button>
         )}
         {paid === 0 && !cancelling && <button className="btn-sm btn-danger" onClick={() => setCancelling(true)}>Cancelar pedido</button>}
       </div>
@@ -112,7 +111,7 @@ function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }
           <label className="field">Motivo do cancelamento<input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></label>
           <div className="row">
             <button onClick={() => setCancelling(false)}>Voltar</button>
-            <button className="btn-danger" onClick={() => attempt(() => cancelOrder(currentUserId(), o.id, reason), 'Pedido cancelado') && onClose()}>Confirmar cancelamento</button>
+            <button className="btn-danger" onClick={() => attempt(() => cancelOrder(o.id, reason), 'Pedido cancelado').then((ok) => ok && onClose())}>Confirmar cancelamento</button>
           </div>
         </div>
       )}
@@ -139,7 +138,7 @@ function PaymentForm({ order: o, remaining, onDone }: { order: Order; remaining:
       cashReceived: p.method === 'dinheiro' && p.cash ? parseBRL(p.cash) : null,
       customerId: p.method === 'fiado' ? p.customerId || null : null,
     }))
-    if (attempt(() => payOrder(currentUserId(), o.id, input), 'Pagamento registrado')) onDone()
+    void attempt(() => payOrder(o.id, input), 'Pagamento registrado').then((ok) => ok && onDone())
   }
 
   return (

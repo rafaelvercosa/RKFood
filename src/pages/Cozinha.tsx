@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Header } from '../components/Layout'
 import { attempt, Segmented, useNow } from '../components/ui'
-import { setOrderStatus } from '../data/actions'
+import { setOrderStatus } from '../data/api'
 import { identLabel, KITCHEN_STATUSES, needsKitchen } from '../data/selectors'
-import { currentUserId } from '../data/session'
 import { useDB } from '../data/store'
 import { beep } from '../lib/beep'
 import { hhmm, minutesSince } from '../lib/dates'
@@ -106,13 +105,13 @@ export default function Cozinha() {
                   {o.notes && <div className="obs">Obs.: {o.notes}</div>}
                   <div className="row" style={{ marginTop: 10 }}>
                     {o.status === 'novo' && (
-                      <button className="btn-primary btn-lg grow" onClick={() => attempt(() => setOrderStatus(currentUserId(), o.id, 'preparo'))}>Iniciar preparo</button>
+                      <button className="btn-primary btn-lg grow" onClick={() => attempt(() => setOrderStatus(o.id, 'preparo'))}>Iniciar preparo</button>
                     )}
                     {o.status === 'preparo' && (
-                      <button className="btn-ok btn-lg grow" onClick={() => attempt(() => setOrderStatus(currentUserId(), o.id, 'pronto'))}>✓ Pronto</button>
+                      <button className="btn-ok btn-lg grow" onClick={() => attempt(() => setOrderStatus(o.id, 'pronto'))}>✓ Pronto</button>
                     )}
                     {o.status === 'pronto' && (
-                      <button className="grow" onClick={() => attempt(() => setOrderStatus(currentUserId(), o.id, 'preparo'))}>↺ Voltar para preparo</button>
+                      <button className="grow" onClick={() => attempt(() => setOrderStatus(o.id, 'preparo'))}>↺ Voltar para preparo</button>
                     )}
                     <button className="icon-btn" title="Imprimir comanda" aria-label="Imprimir comanda" onClick={() => printTicket(o, db.establishment, prefs.paperMm)}>🖨️</button>
                   </div>
