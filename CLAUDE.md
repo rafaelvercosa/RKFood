@@ -97,7 +97,10 @@
   PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 20 testes passando.
 
 ## Próximos passos (nesta ordem)
-1. Deploy na Vercel (`docs/implantacao.md`).
+1. **Publicado na Vercel em 02/11/2026: https://rkfood.vercel.app** (projeto `rkfood`, conta Hobby do Rafael;
+   publica sozinho a cada envio para a `main`). Login anônimo do Supabase ligado (para o convite);
+   cadastro aberto continua desligado. Falta testar num celular de verdade: conectar, PIN, convite pelo
+   WhatsApp, instalar na tela inicial e o botão Compartilhar da lista de compras.
 2. Depois: o **modo contingência offline** e o servidor local na barraca (`docs/roadmap.md`), backups,
    painel do administrador da plataforma, saldo de estoque.
 
