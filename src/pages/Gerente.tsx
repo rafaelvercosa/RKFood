@@ -21,12 +21,13 @@ export default function Gerente() {
       <main className="page">
         <nav className="tabs" aria-label="Seções da gerência">
           {TABS.map((t) => (
-            <NavLink key={t.to} to={t.to} className={({ isActive }) => `btn ${isActive ? 'on' : ''}`}>{t.label}</NavLink>
+            <NavLink key={t.to} to={`/gerente/${t.to}`} className={({ isActive }) => `btn ${isActive ? 'on' : ''}`}>{t.label}</NavLink>
           ))}
         </nav>
         <Routes>
           {TABS.map((t) => <Route key={t.to} path={t.to} element={t.el} />)}
-          <Route path="*" element={<Navigate to="cardapio" replace />} />
+          {/* caminhos absolutos: no React Router 7, link relativo dentro de /gerente/* parte da URL inteira */}
+          <Route path="*" element={<Navigate to="/gerente/cardapio" replace />} />
         </Routes>
       </main>
     </>
