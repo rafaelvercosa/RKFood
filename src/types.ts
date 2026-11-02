@@ -102,6 +102,9 @@ export interface Order {
   items: OrderItem[]
   statusHistory: { status: OrderStatus; at: string; by: string }[]
   cancelReason: string | null
+  /** Quando o gerente adiantou o pedido na fila da cozinha (null = ordem normal). */
+  priorityAt: string | null
+  priorityReason: string | null
 }
 
 export type PaymentMethod = 'pix' | 'credito' | 'debito' | 'dinheiro' | 'fiado'

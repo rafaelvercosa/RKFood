@@ -250,3 +250,10 @@ table.list td.right, table.list th.right { text-align: right; }
 .ident-num { font-size: 0.8rem; color: var(--muted); font-weight: 700; }
 .ticket .ident-name { font-size: 2.6rem; }
 .tv .ticket .ident-name { font-size: 3.4rem; }
+/* pedido adiantado pelo gerente */
+.priority-flag { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: -6px 0 8px; padding: 6px 10px; border-radius: 4px; background: var(--corn); color: var(--corn-ink); font-family: var(--font-sign); font-weight: 800; font-size: 1.4rem; line-height: 1.1; }
+.priority-flag span { font-family: var(--font-text); font-weight: 700; font-size: 0.9rem; }
+.ticket.priority { outline: 3px solid var(--corn); outline-offset: -3px; }
+.ticket.priority.late { outline-color: var(--danger); }
+.badge.prioridade { background: var(--corn); color: var(--corn-ink); }
+.btn-priority { border-color: var(--ink); }

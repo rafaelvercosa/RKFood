@@ -59,6 +59,8 @@ export function createOrder(userId: string, input: NewOrderInput): Order {
       items: input.items.map((i) => ({ ...i, id: newId() })),
       statusHistory: [{ status: initial, at, by: userId }],
       cancelReason: null,
+      priorityAt: null,
+      priorityReason: null,
     }
     // Pedido só com itens que não passam pela cozinha (ex.: bebidas) já nasce pronto.
     if (initial === 'novo' && !needsKitchen(created)) pushStatus(created, 'pronto', userId)
@@ -84,6 +86,23 @@ export function cancelOrder(userId: string, orderId: string, reason: string): vo
     o.cancelReason = reason.trim()
     pushStatus(o, 'cancelado', userId)
     return `Pedido nº ${o.number} cancelado: ${reason.trim()}`
+  })
+}
+
+/** Gerente puxa o pedido para o topo da fila da cozinha (com motivo) ou devolve à ordem normal. */
+export function setOrderPriority(userId: string, orderId: string, priority: boolean, reason: string): void {
+  commit(userId, 'pedido.adiantar', (d) => {
+    const o = findOrder(d, orderId)
+    if (priority) {
+      if (o.status !== 'novo' && o.status !== 'preparo') throw new Error('Só dá para adiantar pedido que está na fila da cozinha')
+      if (!reason.trim()) throw new Error('Informe o motivo')
+      o.priorityAt = nowIso()
+      o.priorityReason = reason.trim()
+      return `Pedido nº ${o.number} (${identLabel(o)}) adiantado na fila: ${reason.trim()}`
+    }
+    o.priorityAt = null
+    o.priorityReason = null
+    return `Pedido nº ${o.number} (${identLabel(o)}) voltou à ordem normal da fila`
   })
 }
 

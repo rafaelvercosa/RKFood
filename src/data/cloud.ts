@@ -272,6 +272,7 @@ function toDatabase(r: {
       id: o.id, number: o.number, businessDate: o.business_date, createdAt: o.created_at, createdBy: o.created_by,
       identType: o.ident_type, identValue: o.ident_value, mode: o.mode, notes: o.notes, status: o.status,
       cancelReason: o.cancel_reason,
+      priorityAt: o.priority_at, priorityReason: o.priority_reason,
       statusHistory: (o.status_history as Row[]).map((h) => ({ status: h.status, at: h.at, by: h.by })),
       items: (o.order_items as Row[]).map((i) => ({
         id: i.id, productId: i.product_id, name: i.name, unitPrice: i.unit_price_cents, qty: i.qty, notes: i.notes, sendToKitchen: i.send_to_kitchen,

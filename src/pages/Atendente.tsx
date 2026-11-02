@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { PriorityButton } from '../components/Priority'
 import { Header } from '../components/Layout'
 import { attempt, Modal, OrderIdent, Photo, Segmented, toast, useNow } from '../components/ui'
 import { createOrder, setOrderStatus } from '../data/api'
@@ -230,6 +231,7 @@ function OrdersToday() {
               <div className="stack" style={{ justifyItems: 'end', gap: 4 }}>
                 <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
                 <span className={`badge ${o.status}`}>{STATUS_LABEL[o.status]}</span>
+                {o.priorityAt && (o.status === 'novo' || o.status === 'preparo') && <span className="badge prioridade" title={o.priorityReason ?? ''}>⬆ Prioridade</span>}
                 {isKitchenLate(o, db.establishment.kitchenTargetMin, now) && <span className="badge atrasado">Atrasado</span>}
                 {o.status !== 'cancelado' && <PaidBadge order={o} />}
               </div>
@@ -237,6 +239,7 @@ function OrdersToday() {
             <div className="small">{o.items.map((i) => `${i.qty}× ${i.name}`).join(', ')}</div>
             <div className="row between">
               <span className="money"><b>{brl(orderTotal(o))}</b></span>
+              <PriorityButton order={o} />
               {o.status === 'pronto' && (
                 <button className="btn-ok" onClick={() => attempt(() => setOrderStatus(o.id, 'entregue'), 'Marcado como entregue')}>
                   ✓ Entregue

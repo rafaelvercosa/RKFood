@@ -39,6 +39,16 @@ export function kitchenSentAt(order: Order): string {
   return order.statusHistory.find((h) => h.status === 'novo')?.at ?? order.createdAt
 }
 
+/** Ordem da fila da cozinha: adiantados pelo gerente primeiro (na ordem em que foram adiantados), depois por chegada. */
+export function compareKitchenQueue(a: Order, b: Order): number {
+  const pa = a.priorityAt ?? null
+  const pb = b.priorityAt ?? null
+  if (pa && pb) return pa.localeCompare(pb)
+  if (pa) return -1
+  if (pb) return 1
+  return kitchenSentAt(a).localeCompare(kitchenSentAt(b))
+}
+
 /** Quando ficou pronto pela última vez (ou null se ainda não ficou). */
 export function kitchenReadyAt(order: Order): string | null {
   return [...order.statusHistory].reverse().find((h) => h.status === 'pronto')?.at ?? null

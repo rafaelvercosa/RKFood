@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Header } from '../components/Layout'
+import { PriorityButton } from '../components/Priority'
 import { attempt, OrderIdent, Segmented, useNow } from '../components/ui'
 import { setOrderStatus } from '../data/api'
-import { identLabel, isKitchenLate, KITCHEN_STATUSES, kitchenReadyAt, kitchenSeconds, kitchenSentAt, modeLabel, needsKitchen } from '../data/selectors'
+import { compareKitchenQueue, identLabel, isKitchenLate, KITCHEN_STATUSES, kitchenReadyAt, kitchenSeconds, kitchenSentAt, modeLabel, needsKitchen } from '../data/selectors'
 import { useDB } from '../data/store'
 import { beep } from '../lib/beep'
 import { hhmm } from '../lib/dates'
@@ -42,8 +43,8 @@ export default function Cozinha() {
 
   const active = db.orders
     .filter((o) => KITCHEN_STATUSES.includes(o.status) && needsKitchen(o))
-    .sort((a, b) => kitchenSentAt(a).localeCompare(kitchenSentAt(b)))
-  // fila na ordem em que chegou na cozinha; prontos do mais recente para o mais antigo
+    .sort(compareKitchenQueue)
+  // fila: adiantados pelo gerente primeiro, depois na ordem em que chegou na cozinha; prontos do mais recente para o mais antigo
   const queue = active.filter((o) => o.status !== 'pronto')
   const ready = active.filter((o) => o.status === 'pronto').sort((a, b) => (kitchenReadyAt(b) ?? '').localeCompare(kitchenReadyAt(a) ?? ''))
   const late = queue.filter((o) => isKitchenLate(o, targetMin, now))
@@ -91,15 +92,21 @@ export default function Cozinha() {
             {shown.map((o, idx) => {
               const isLate = isKitchenLate(o, targetMin, now)
               return (
-                <article key={o.id} className={`card comanda ticket ${o.status} ${isLate ? 'late' : ''}`}>
+                <article key={o.id} className={`card comanda ticket ${o.status} ${isLate ? 'late' : ''} ${o.priorityAt ? 'priority' : ''}`}>
+                  {o.priorityAt && (
+                    <div className="priority-flag">⬆ Prioridade<span>{o.priorityReason}</span></div>
+                  )}
                   <div className="row between">
                     <OrderIdent order={o} />
                     <span className="row" style={{ gap: 6 }}>
-                      {filter === 'fila' && <span className="queue-pos" title="Ordem de chegada na cozinha">{idx + 1}º</span>}
+                      {filter === 'fila' && <span className="queue-pos" title="Posição na fila">{idx + 1}º</span>}
                       <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
                     </span>
                   </div>
-                  <span className="muted small">chegou {hhmm(kitchenSentAt(o))}</span>
+                  <div className="row between">
+                    <span className="muted small">chegou {hhmm(kitchenSentAt(o))}</span>
+                    <PriorityButton order={o} />
+                  </div>
                   <KitchenTimer order={o} targetMin={targetMin} now={now} />
                   <ul>
                     {o.items.filter((i) => i.sendToKitchen).map((i) => (

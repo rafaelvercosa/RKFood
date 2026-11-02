@@ -79,6 +79,12 @@ export async function cancelOrder(orderId: string, reason: string): Promise<void
   await rpc('cancel_order', { p_order: orderId, p_reason: reason })
 }
 
+/** Só gerente. Adiantar exige motivo; fica no histórico. */
+export async function setOrderPriority(orderId: string, priority: boolean, reason = ''): Promise<void> {
+  if (!isCloud) return demo.setOrderPriority(uid(), orderId, priority, reason)
+  await rpc('set_order_priority', { p_order: orderId, p_priority: priority, p_reason: reason })
+}
+
 export async function payOrder(orderId: string, payments: PaymentInput[]): Promise<void> {
   if (!isCloud) return demo.payOrder(uid(), orderId, payments)
   await rpc('pay_order', {

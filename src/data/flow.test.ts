@@ -194,3 +194,32 @@ describe('tempo de preparo', () => {
     expect(getDB().establishment.kitchenTargetMin).toBe(20)
   })
 })
+
+describe('adiantar pedido na fila', () => {
+  it('adiantados vão para o topo, na ordem em que foram adiantados', () => {
+    const o = (id: string, sent: string, priorityAt: string | null) =>
+      ({ id, createdAt: sent, priorityAt, statusHistory: [{ status: 'novo', at: sent, by: 'u' }] }) as unknown as Parameters<typeof sel.compareKitchenQueue>[0]
+    const fila = [
+      o('a', '2026-11-03T12:00:00Z', null),
+      o('b', '2026-11-03T12:05:00Z', '2026-11-03T12:20:00Z'),
+      o('c', '2026-11-03T12:10:00Z', null),
+      o('d', '2026-11-03T12:15:00Z', '2026-11-03T12:18:00Z'),
+    ].sort(sel.compareKitchenQueue)
+    expect(fila.map((x) => x.id)).toEqual(['d', 'b', 'a', 'c'])
+  })
+
+  it('exige motivo, só vale na fila e fica no histórico', () => {
+    const { owner, carne, refri } = setup()
+    const p = actions.createOrder(owner.id, { identType: 'mesa', identValue: '4', mode: 'local', notes: '', items: [item(carne, 1)] })
+    expect(() => actions.setOrderPriority(owner.id, p.id, true, ' ')).toThrow('motivo')
+    actions.setOrderPriority(owner.id, p.id, true, 'Cliente esperou demais')
+    const salvo = getDB().orders.find((x) => x.id === p.id)!
+    expect(salvo.priorityAt).not.toBeNull()
+    expect(getDB().audit[0].summary).toContain('adiantado na fila: Cliente esperou demais')
+    actions.setOrderPriority(owner.id, p.id, false, '')
+    expect(getDB().orders.find((x) => x.id === p.id)!.priorityAt).toBeNull()
+    // pedido só de bebida já nasce pronto: não está na fila
+    const bebida = actions.createOrder(owner.id, { identType: 'mesa', identValue: '5', mode: 'local', notes: '', items: [item(refri, 1)] })
+    expect(() => actions.setOrderPriority(owner.id, bebida.id, true, 'teste')).toThrow('fila da cozinha')
+  })
+})
