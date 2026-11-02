@@ -2,13 +2,15 @@
 // Os mesmos conceitos existem no banco (supabase/migrations). Valores em dinheiro
 // são sempre guardados em CENTAVOS (inteiros) para evitar erro de arredondamento.
 
-export type Role = 'atendente' | 'cozinha' | 'caixa' | 'gerente'
+/** Gerente pode tudo; dono pode tudo e é o único que autoriza cortesia e mexe em outro dono. */
+export type Role = 'atendente' | 'cozinha' | 'caixa' | 'gerente' | 'dono'
 
 export const ROLE_LABEL: Record<Role, string> = {
   atendente: 'Atendente',
   cozinha: 'Cozinha',
   caixa: 'Caixa',
   gerente: 'Gerente',
+  dono: 'Dono',
 }
 
 /** Quando o cliente paga: antes do pedido ir para a cozinha ou depois de consumir. */
@@ -102,12 +104,18 @@ export interface Order {
   items: OrderItem[]
   statusHistory: { status: OrderStatus; at: string; by: string }[]
   cancelReason: string | null
+  /** Gerente que autorizou o cancelamento com o PIN. */
+  cancelAuthorizedBy: string | null
   /** Quando o gerente adiantou o pedido na fila da cozinha (null = ordem normal). */
   priorityAt: string | null
   priorityReason: string | null
 }
 
-export type PaymentMethod = 'pix' | 'credito' | 'debito' | 'dinheiro' | 'fiado'
+/** Cortesia: o pedido sai sem cobrança, só com o PIN do dono. */
+export type PaymentMethod = 'pix' | 'credito' | 'debito' | 'dinheiro' | 'fiado' | 'cortesia'
+
+/** Formas que entram no caixa (fiado é dívida; cortesia não é cobrada). */
+export type CashMethod = Exclude<PaymentMethod, 'fiado' | 'cortesia'>
 
 export const METHOD_LABEL: Record<PaymentMethod, string> = {
   pix: 'Pix',
@@ -115,6 +123,7 @@ export const METHOD_LABEL: Record<PaymentMethod, string> = {
   debito: 'Débito',
   dinheiro: 'Dinheiro',
   fiado: 'Fiado',
+  cortesia: 'Cortesia',
 }
 
 /** Pagamento de um pedido. Quando method = 'fiado', o valor vira dívida do cliente. */
@@ -127,6 +136,8 @@ export interface Payment {
   customerId: string | null // obrigatório quando fiado
   createdAt: string
   createdBy: string
+  /** Cortesia: o dono que autorizou com o PIN. */
+  authorizedBy: string | null
 }
 
 export interface Customer {
@@ -144,7 +155,7 @@ export interface FiadoSettlement {
   id: string
   customerId: string
   amount: number
-  method: Exclude<PaymentMethod, 'fiado'>
+  method: CashMethod
   notes: string
   createdAt: string
   createdBy: string

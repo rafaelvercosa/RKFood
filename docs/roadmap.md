@@ -3,6 +3,10 @@
 ## Feito
 - **Etapa 1:** pedido, cozinha, caixa, fiado, cardápio com fotos, personalização, lixeira e histórico
 - **Etapa 2:** Supabase multi-empresa (RLS), login do aparelho + PIN, tempo real, fotos no Storage
+- **Etapa 3 (nov/2026):** visual "placa de barraca"; mesa em destaque; mesas 1 a 10; comer aqui/para viagem;
+  cronômetro da cozinha com tempo estimado e alerta de atrasados; gerente adianta pedido na fila; perfil
+  **dono**; cancelamento só com PIN de gerente; **cortesia** só com PIN do dono; histórico com entrada e saída
+  por PIN, PIN errado, autorização negada e conexão de aparelho
 
 ## Agora
 - Publicar: aplicar o banco no Supabase, cadastrar o primeiro estabelecimento, deploy na Vercel
@@ -36,16 +40,9 @@ Cenário real: internet de 4G **oscilando** com frequência e, às vezes, **hora
 
 **Recomendação operacional:** roteador 4G reserva com chip de outra operadora.
 
-### Autorização por PIN em ações sensíveis
-- **Cancelar pedido** só com o PIN de um **gerente**. Hoje o perfil caixa já cancela sozinho
-  (`cancel_order` exige `caixa`). Se quem estiver operando não for gerente, o app pede o PIN de um gerente
-  na hora, e o histórico registra quem autorizou.
-- **Pedido pago como cortesia** (nova forma de pagamento) só com o PIN do **dono**. Hoje não existe perfil
-  "dono", só atendente, cozinha, caixa e gerente. Será preciso criar essa marcação, por exemplo no usuário
-  criado pelo `bootstrap_establishment`. A cortesia deve aparecer separada nos relatórios.
-- **Tudo que acontece fica no histórico** (`audit_log`), registrando quem pediu e quem autorizou. Hoje toda
-  gravação feita pelas funções já entra no histórico. Ainda faltam: a entrada e a saída por PIN, as
-  tentativas de PIN errado, a conexão de aparelho e as autorizações acima (cancelamento e cortesia).
+### Segurança do PIN
+- Bloquear por alguns minutos depois de várias tentativas de PIN errado seguidas no mesmo aparelho
+  (hoje as tentativas ficam no histórico, mas não há bloqueio).
 
 ### Outros
 - Backups automáticos diários (Google Drive + segundo local com bloqueio de exclusão)

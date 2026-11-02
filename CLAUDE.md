@@ -60,13 +60,17 @@
   "Teste do sistema") e o cliente "Cliente Teste" com R$ 10 de fiado.
 - Ainda não testado na nuvem: cobrança `antes`, extrato em PDF/WhatsApp, dois aparelhos físicos diferentes
   e a recusa de `set_order_priority` para quem não é gerente (testada só no modo demonstração).
-- O perfil **"dono"** ainda não existe; onde o Rafael pediu "gerente ou dono", hoje vale o gerente.
+- **Dono, autorização e histórico** (migração 6, `20261103000300_dono_autorizacao_historico.sql`): perfil
+  `dono` (pode tudo e é o único que autoriza cortesia e mexe em outro dono; o primeiro gerente virou dono);
+  `cancel_order` exige PIN de gerente e `pay_order` com `cortesia` exige PIN do dono (`private.authorize`);
+  a recusa fica no `audit_log`, por isso essas funções devolvem a mensagem como texto em vez de lançar erro.
+  Histórico também de entrada/saída por PIN, PIN errado e conexão de aparelho (`log_device_event`).
+- **Testes do banco no Windows sem Docker:** dá para rodar `supabase/tests` num Postgres em memória com o
+  PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 16 testes passando.
 
 ## Próximos passos (nesta ordem)
 1. Deploy na Vercel (`docs/implantacao.md`).
-2. Pedido do Rafael: **cancelar pedido só com PIN de gerente** e **pagamento como cortesia só com PIN do
-   dono**, com tudo registrado no histórico (detalhes em `docs/roadmap.md`).
-3. Depois: o **modo contingência offline** e o servidor local na barraca (`docs/roadmap.md`), backups,
+2. Depois: o **modo contingência offline** e o servidor local na barraca (`docs/roadmap.md`), backups,
    painel do administrador da plataforma, ficha técnica e lista de compras, relatórios por período.
 
 ## Mapa do código

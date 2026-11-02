@@ -42,19 +42,29 @@ const uid = () => currentUserId()
 export async function loginPin(pin: string): Promise<User> {
   if (!isCloud) {
     const user = getDB().users.find((u) => !u.deletedAt && u.pin === pin)
-    if (!user) throw new Error('PIN não encontrado')
+    if (!user) {
+      demo.logWrongPin()
+      throw new Error('PIN não encontrado')
+    }
+    demo.logPinLogin(user)
     setOperator(user.id, null)
     return user
   }
   const { data, error } = await withTimeout(sb().rpc('operator_login', { p_establishment: establishmentId(), p_pin: pin }))
   if (error) throw new Error(friendly(error.message))
+  // PIN errado: o banco registra no histórico e devolve nenhuma linha
   const row = (data as { token: string; staff_id: string; name: string; roles: User['roles'] }[])[0]
+  if (!row) throw new Error('PIN não encontrado')
   setOperator(row.staff_id, row.token)
   return { id: row.staff_id, name: row.name, roles: row.roles, pin: '', deletedAt: null }
 }
 
 export async function logoutOperator(): Promise<void> {
   const token = operatorToken()
+  if (!isCloud && token === null) {
+    const id = uid()
+    if (id !== 'desconhecido') demo.logPinLogout(id)
+  }
   clearOperator()
   if (isCloud && token) await sb().rpc('operator_logout', { p_token: token })
 }
@@ -74,9 +84,12 @@ export async function setOrderStatus(orderId: string, status: OrderStatus): Prom
   await rpc('set_order_status', { p_order: orderId, p_status: status })
 }
 
-export async function cancelOrder(orderId: string, reason: string): Promise<void> {
-  if (!isCloud) return demo.cancelOrder(uid(), orderId, reason)
-  await rpc('cancel_order', { p_order: orderId, p_reason: reason })
+/** Exige o PIN de um gerente (ou dono). PIN recusado fica no histórico. */
+export async function cancelOrder(orderId: string, reason: string, authPin: string): Promise<void> {
+  if (!isCloud) return demo.cancelOrder(uid(), orderId, reason, authPin)
+  // o banco devolve a mensagem (em vez de erro) quando o PIN não autoriza, para o registro ficar
+  const refused = await rpc<string | null>('cancel_order', { p_order: orderId, p_reason: reason, p_auth_pin: authPin })
+  if (refused) throw new Error(refused)
 }
 
 /** Só gerente. Adiantar exige motivo; fica no histórico. */
@@ -85,14 +98,17 @@ export async function setOrderPriority(orderId: string, priority: boolean, reaso
   await rpc('set_order_priority', { p_order: orderId, p_priority: priority, p_reason: reason })
 }
 
-export async function payOrder(orderId: string, payments: PaymentInput[]): Promise<void> {
-  if (!isCloud) return demo.payOrder(uid(), orderId, payments)
-  await rpc('pay_order', {
+/** Com cortesia, authPin precisa ser o PIN do dono. */
+export async function payOrder(orderId: string, payments: PaymentInput[], authPin = ''): Promise<void> {
+  if (!isCloud) return demo.payOrder(uid(), orderId, payments, authPin)
+  const refused = await rpc<string | null>('pay_order', {
     p_order: orderId,
     p_payments: payments.map((p) => ({
       method: p.method, amount_cents: p.amount, cash_received_cents: p.cashReceived ?? null, customer_id: p.customerId ?? null,
     })),
+    p_auth_pin: authPin || null,
   })
+  if (refused) throw new Error(refused)
 }
 
 // ---------------------------------------------------------------- fiado

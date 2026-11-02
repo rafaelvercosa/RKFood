@@ -10,6 +10,7 @@
 import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { today } from '../lib/dates'
+import { deviceInfo } from '../lib/device'
 import type { AuditEntry, Category, Customer, Database, Establishment, FiadoSettlement, Order, Payment, Product, User } from '../types'
 import { sb } from './backend'
 import { clearOperator } from './session'
@@ -97,12 +98,23 @@ async function boot(): Promise<void> {
 export async function signInDevice(email: string, password: string): Promise<void> {
   const { error } = await withTimeout(sb().auth.signInWithPassword({ email: email.trim(), password }))
   if (error) throw new Error(friendly(error.message))
+  await logDeviceEvent('conectar')
   await afterSignIn()
 }
 
 export async function signOutDevice(): Promise<void> {
   try { localStorage.removeItem(EST_KEY) } catch { /* ignora */ }
+  await logDeviceEvent('desconectar')
   await sb().auth.signOut()
+}
+
+/** Conexão e desconexão do aparelho ficam no histórico. Falha aqui não impede entrar ou sair. */
+async function logDeviceEvent(event: 'conectar' | 'desconectar'): Promise<void> {
+  try {
+    await withTimeout(sb().rpc('log_device_event', { p_event: event, p_info: deviceInfo() }), 5000)
+  } catch {
+    // sem internet ou banco antigo: segue sem registrar
+  }
 }
 
 async function afterSignIn(): Promise<void> {
@@ -265,13 +277,13 @@ function toDatabase(r: {
     for (const p of o.payments as Row[]) {
       payments.push({
         id: p.id, orderId: p.order_id, method: p.method, amount: p.amount_cents, cashReceived: p.cash_received_cents,
-        customerId: p.customer_id, createdAt: p.created_at, createdBy: p.created_by,
+        customerId: p.customer_id, createdAt: p.created_at, createdBy: p.created_by, authorizedBy: p.authorized_by,
       })
     }
     return {
       id: o.id, number: o.number, businessDate: o.business_date, createdAt: o.created_at, createdBy: o.created_by,
       identType: o.ident_type, identValue: o.ident_value, mode: o.mode, notes: o.notes, status: o.status,
-      cancelReason: o.cancel_reason,
+      cancelReason: o.cancel_reason, cancelAuthorizedBy: o.cancel_authorized_by,
       priorityAt: o.priority_at, priorityReason: o.priority_reason,
       statusHistory: (o.status_history as Row[]).map((h) => ({ status: h.status, at: h.at, by: h.by })),
       items: (o.order_items as Row[]).map((i) => ({

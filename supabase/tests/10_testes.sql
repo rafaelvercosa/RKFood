@@ -33,14 +33,12 @@ begin
   raise notice 'OK isolamento: A só vê o próprio estabelecimento';
 end $$;
 
--- PIN errado
+-- PIN errado: não entra e fica no histórico (a função não lança erro, para o registro ficar)
 do $$
 begin
-  perform public.operator_login((select v::uuid from ctx where k = 'ea'), '9999');
-  raise exception 'deveria recusar PIN errado';
-exception when others then
-  assert sqlerrm = 'PIN não encontrado', sqlerrm;
-  raise notice 'OK PIN errado recusado';
+  assert (select count(*) from public.operator_login((select v::uuid from ctx where k = 'ea'), '9999')) = 0, 'PIN errado não deveria entrar';
+  assert exists (select 1 from public.audit_log where action = 'pin.errado'), 'PIN errado deveria ficar no histórico';
+  raise notice 'OK PIN errado recusado e registrado';
 end $$;
 
 -- Login no estabelecimento B com conta A deve falhar
@@ -159,10 +157,10 @@ begin
   exception when others then assert sqlerrm like 'Valor maior que a dívida%', sqlerrm; end;
 
   -- cancelamento
-  perform public.cancel_order(tcx, o3.id, 'desistiu');
+  perform public.cancel_order(tcx, o3.id, 'desistiu', '1234');
   assert (select status from public.orders where id = o3.id) = 'cancelado', 'cancelado';
   begin
-    perform public.cancel_order(tcx, o1.id, 'teste');
+    perform public.cancel_order(tcx, o1.id, 'teste', '1234');
     raise exception 'não cancela pedido pago';
   exception when others then assert sqlerrm like 'Pedido já tem pagamento%', sqlerrm; end;
 
@@ -189,7 +187,7 @@ declare
   e public.establishments := (select e from public.establishments e);
   o public.orders;
 begin
-  perform public.save_establishment(ta, e.name, e.slogan, null, null, '#112233', 'antes', '', '', 'chave@pix');
+  perform public.save_establishment(ta, e.name, e.slogan, null, null, '#112233', 'antes', '', '', 'chave@pix', 15);
   o := public.create_order(ta, 'mesa', '9', 'local', '', jsonb_build_array(jsonb_build_object('product_id', carne, 'qty', 1)));
   assert o.status = 'aguardando_pagamento', 'deveria aguardar pagamento';
   begin
@@ -199,6 +197,110 @@ begin
   perform public.pay_order(ta, o.id, '[{"method":"pix","amount_cents":1000}]');
   assert (select status from public.orders where id = o.id) = 'novo', 'pago → cozinha';
   raise notice 'OK cobrança antes: só vai para a cozinha depois de pago';
+  begin
+    perform public.save_establishment(ta, e.name, e.slogan, null, null, '#112233', 'depois', '', '', 'chave@pix', 0);
+    raise exception 'tempo estimado 0 deveria falhar';
+  exception when others then assert sqlerrm like 'O tempo estimado deve ser%', sqlerrm; end;
+  raise notice 'OK tempo estimado de preparo validado';
+end $$;
+
+-- Perfil dono e gerente comum
+do $$
+declare ta uuid := (select v::uuid from ctx where k = 'ta');
+begin
+  assert (select 'dono' = any (roles) from public.staff where name = 'Dono A'), 'cadastro inicial deveria criar o dono';
+  perform public.save_staff(ta, null, 'Gerente G', '5555', array['gerente']);
+end $$;
+insert into ctx select 'tg', token::text from public.operator_login((select v::uuid from ctx where k = 'ea'), '5555');
+
+do $$
+declare
+  ta uuid := (select v::uuid from ctx where k = 'ta');
+  tg uuid := (select v::uuid from ctx where k = 'tg');
+  dono uuid := (select id from public.staff where name = 'Dono A');
+begin
+  begin
+    perform public.save_staff(tg, null, 'Outro', '6666', array['dono']);
+    raise exception 'gerente não deveria criar dono';
+  exception when others then assert sqlerrm = 'Só o dono pode dar o perfil de dono', sqlerrm; end;
+  begin
+    perform public.save_staff(tg, dono, 'Dono A', null, array['gerente']);
+    raise exception 'gerente não deveria alterar o dono';
+  exception when others then assert sqlerrm = 'Só o dono pode alterar outro dono', sqlerrm; end;
+  begin
+    perform public.set_trashed(tg, 'users', dono, true);
+    raise exception 'gerente não deveria excluir o dono';
+  exception when others then assert sqlerrm like 'Só o dono pode excluir%', sqlerrm; end;
+  begin
+    perform public.save_staff(ta, dono, 'Dono A', null, array['gerente']);
+    raise exception 'não pode ficar sem dono';
+  exception when others then assert sqlerrm = 'É preciso ter pelo menos um dono', sqlerrm; end;
+  -- gerente comum continua podendo mexer no cardápio
+  perform public.save_category(tg, null, 'Porções');
+  raise notice 'OK perfil dono: só o dono cria, altera ou exclui dono, e sempre sobra um';
+end $$;
+
+-- Cancelamento com PIN de gerente, cortesia com PIN do dono
+do $$
+declare
+  tana uuid := (select v::uuid from ctx where k = 'tana');
+  tcx uuid := (select v::uuid from ctx where k = 'tcx');
+  tg uuid := (select v::uuid from ctx where k = 'tg');
+  carne uuid := (select id from public.products where name = 'Carne');
+  dono uuid := (select id from public.staff where name = 'Dono A');
+  ger uuid := (select id from public.staff where name = 'Gerente G');
+  o public.orders;
+  msg text;
+begin
+  perform public.save_establishment((select v::uuid from ctx where k = 'ta'), 'Espetinho A', '', null, null, '#112233', 'depois', '', '', '', 15);
+  o := public.create_order(tana, 'mesa', '7', 'local', '', jsonb_build_array(jsonb_build_object('product_id', carne, 'qty', 1)));
+  msg := public.cancel_order(tcx, o.id, 'cliente foi embora', '0000');
+  assert msg like 'PIN de gerente incorreto%', coalesce(msg, 'cancelou com PIN errado');
+  msg := public.cancel_order(tcx, o.id, 'cliente foi embora', '3333');
+  assert msg like 'PIN de gerente incorreto%', 'PIN do caixa não autoriza';
+  assert (select status from public.orders where id = o.id) = 'novo', 'não deveria cancelar sem gerente';
+  assert (select count(*) from public.audit_log where action = 'autorizacao.negada') = 2, 'recusas no histórico';
+  assert exists (select 1 from public.audit_log where summary like '%PIN de Caixa, que não é gerente%'), 'diz de quem era o PIN';
+  msg := public.cancel_order(tcx, o.id, 'cliente foi embora', '5555');
+  assert msg is null, msg;
+  assert (select status = 'cancelado' and cancel_authorized_by = ger from public.orders where id = o.id), 'cancelado com autorizador';
+  assert exists (select 1 from public.audit_log where summary like '%cancelado por Caixa, autorizado por Gerente G: cliente foi embora'), 'histórico do cancelamento';
+
+  o := public.create_order(tana, 'nome', 'Seu Zé', 'local', '', jsonb_build_array(jsonb_build_object('product_id', carne, 'qty', 2)));
+  msg := public.pay_order(tcx, o.id, '[{"method":"pix","amount_cents":1000},{"method":"cortesia","amount_cents":1000}]', '5555');
+  assert msg like 'PIN do dono incorreto%', 'gerente não autoriza cortesia';
+  assert private.order_paid(o.id) = 0, 'nada pago sem autorização';
+  msg := public.pay_order(tcx, o.id, '[{"method":"pix","amount_cents":1000},{"method":"cortesia","amount_cents":1000}]', '1234');
+  assert msg is null, msg;
+  assert (select settled from public.orders where id = o.id), 'cortesia quita o pedido';
+  assert (select authorized_by from public.payments where order_id = o.id and method = 'cortesia') = dono, 'quem autorizou a cortesia';
+  assert exists (select 1 from public.audit_log where summary like '%Cortesia R$ 10,00 (cortesia autorizada por Dono A)'), 'histórico da cortesia';
+  raise notice 'OK cancelamento com PIN de gerente e cortesia com PIN do dono, tudo no histórico';
+
+  o := public.create_order(tana, 'mesa', '8', 'local', '', jsonb_build_array(jsonb_build_object('product_id', carne, 'qty', 1)));
+  begin
+    perform public.set_order_priority(tcx, o.id, true, 'pressa');
+    raise exception 'caixa não deveria adiantar';
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
+  perform public.set_order_priority(tg, o.id, true, 'Cliente esperou demais');
+  assert (select priority_at is not null from public.orders where id = o.id), 'adiantado';
+  raise notice 'OK só gerente adianta pedido';
+end $$;
+
+-- Entrada e saída por PIN e aparelho no histórico
+do $$
+declare tg uuid := (select v::uuid from ctx where k = 'tg');
+begin
+  assert exists (select 1 from public.audit_log where action = 'pin.entrar' and summary = 'Entrou com o PIN: Gerente G'), 'entrada';
+  perform public.operator_logout(tg);
+  assert exists (select 1 from public.audit_log where action = 'pin.sair' and summary = 'Saiu: Gerente G'), 'saída';
+  perform public.log_device_event('conectar', 'Chrome no Windows');
+  assert exists (select 1 from public.audit_log where action = 'aparelho.conectar' and summary like 'Aparelho conectado (a@teste.com): Chrome no Windows'), 'aparelho';
+  begin
+    perform public.log_device_event('apagar', 'x');
+    raise exception 'evento inválido deveria falhar';
+  exception when others then assert sqlerrm = 'Evento inválido', sqlerrm; end;
+  raise notice 'OK entrada, saída e aparelho no histórico';
 end $$;
 
 -- ===================================================== como aparelho B

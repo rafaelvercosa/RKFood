@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CustomerForm } from '../components/CustomerForm'
 import { Header } from '../components/Layout'
-import { attempt, Modal, OrderIdent, Segmented } from '../components/ui'
+import { attempt, AuthPinField, Modal, OrderIdent, Segmented } from '../components/ui'
 import { cancelOrder, payOrder, setOrderStatus, type PaymentInput } from '../data/api'
 import { customerBalance, identLabel, modeLabel, orderPaid, orderPayments, orderRemaining, orderTotal } from '../data/selectors'
 import { useDB } from '../data/store'
@@ -69,7 +69,7 @@ function OrderList({ paid }: { paid: boolean }) {
   )
 }
 
-const METHODS: PaymentMethod[] = ['pix', 'dinheiro', 'debito', 'credito', 'fiado']
+const METHODS: PaymentMethod[] = ['pix', 'dinheiro', 'debito', 'credito', 'fiado', 'cortesia']
 
 function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
   const db = useDB()
@@ -78,6 +78,8 @@ function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }
   const remaining = orderRemaining(db, o)
   const [cancelling, setCancelling] = useState(false)
   const [reason, setReason] = useState('')
+  const [managerPin, setManagerPin] = useState('')
+  const staffName = (id: string | null) => db.users.find((u) => u.id === id)?.name ?? '?'
 
   return (
     <Modal title={`${identLabel(o)} · pedido nº ${o.number}`} onClose={onClose}>
@@ -92,7 +94,11 @@ function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }
           <tr><td><b>Total</b></td><td className="right money"><b>{brl(total)}</b></td></tr>
           {orderPayments(db, o.id).map((p) => (
             <tr key={p.id} className="muted">
-              <td>Pago · {METHOD_LABEL[p.method]}{p.method === 'fiado' && ` (${db.customers.find((c) => c.id === p.customerId)?.name ?? '?'})`}</td>
+              <td>
+                Pago · {METHOD_LABEL[p.method]}
+                {p.method === 'fiado' && ` (${db.customers.find((c) => c.id === p.customerId)?.name ?? '?'})`}
+                {p.method === 'cortesia' && ` (autorizada por ${staffName(p.authorizedBy)})`}
+              </td>
               <td className="right money">− {brl(p.amount)}</td>
             </tr>
           ))}
@@ -112,9 +118,15 @@ function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }
       {cancelling && (
         <div className="card flat stack">
           <label className="field">Motivo do cancelamento<input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></label>
+          <AuthPinField label="PIN de um gerente para autorizar" value={managerPin} onChange={setManagerPin} />
           <div className="row">
-            <button onClick={() => setCancelling(false)}>Voltar</button>
-            <button className="btn-danger" onClick={() => attempt(() => cancelOrder(o.id, reason), 'Pedido cancelado').then((ok) => ok && onClose())}>Confirmar cancelamento</button>
+            <button onClick={() => { setCancelling(false); setManagerPin('') }}>Voltar</button>
+            <button
+              className="btn-danger"
+              onClick={() => attempt(() => cancelOrder(o.id, reason, managerPin), 'Pedido cancelado').then((ok) => (ok ? onClose() : setManagerPin('')))}
+            >
+              Confirmar cancelamento
+            </button>
           </div>
         </div>
       )}
@@ -128,6 +140,7 @@ function PaymentForm({ order: o, remaining, onDone }: { order: Order; remaining:
   const db = useDB()
   const [parts, setParts] = useState<Part[]>([{ method: 'pix', amount: centsToInput(remaining), cash: '', customerId: '' }])
   const [newCustomerFor, setNewCustomerFor] = useState<number | null>(null)
+  const [ownerPin, setOwnerPin] = useState('')
   const customers = useMemo(() => db.customers.filter((c) => !c.deletedAt).sort((a, b) => a.name.localeCompare(b.name)), [db.customers])
 
   const sum = parts.reduce((s, p) => s + parseBRL(p.amount), 0)
@@ -141,7 +154,7 @@ function PaymentForm({ order: o, remaining, onDone }: { order: Order; remaining:
       cashReceived: p.method === 'dinheiro' && p.cash ? parseBRL(p.cash) : null,
       customerId: p.method === 'fiado' ? p.customerId || null : null,
     }))
-    void attempt(() => payOrder(o.id, input), 'Pagamento registrado').then((ok) => ok && onDone())
+    void attempt(() => payOrder(o.id, input, ownerPin), 'Pagamento registrado').then((ok) => (ok ? onDone() : setOwnerPin('')))
   }
 
   return (
@@ -195,6 +208,9 @@ function PaymentForm({ order: o, remaining, onDone }: { order: Order; remaining:
         </button>
       )}
       {diff < 0 && <p className="error-text">A soma passa do valor em {brl(-diff)}.</p>}
+      {parts.some((p) => p.method === 'cortesia') && (
+        <AuthPinField label="Cortesia: PIN do dono para autorizar" value={ownerPin} onChange={setOwnerPin} />
+      )}
       <button className="btn-ok btn-lg" disabled={sum <= 0 || diff < 0} onClick={confirm}>
         Confirmar {brl(sum)}{diff > 0 ? ` (fica faltando ${brl(diff)})` : ''}
       </button>

@@ -132,3 +132,17 @@ export function OrderIdent({ order }: { order: Pick<Order, 'identType' | 'identV
     </div>
   )
 }
+
+// ---------------------------------------------------------------- PIN de autorização
+
+/** Campo para o gerente ou o dono digitar o PIN na hora de autorizar (cancelamento, cortesia). */
+export function AuthPinField({ label, value, onChange }: { label: string; value: string; onChange: (pin: string) => void }) {
+  return (
+    <label className="field auth-pin">{label}
+      <input
+        type="password" inputMode="numeric" autoComplete="off" maxLength={6} placeholder="••••"
+        value={value} onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
+      />
+    </label>
+  )
+}

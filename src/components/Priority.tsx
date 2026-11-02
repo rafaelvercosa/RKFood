@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { setOrderPriority } from '../data/api'
 import { identLabel } from '../data/selectors'
-import { useCurrentUser } from '../data/session'
+import { hasRole, useCurrentUser } from '../data/session'
 import type { Order } from '../types'
 import { attempt, Modal } from './ui'
 
@@ -12,7 +12,7 @@ export function PriorityButton({ order }: { order: Order }) {
   const user = useCurrentUser()
   const [asking, setAsking] = useState(false)
   const [reason, setReason] = useState('')
-  if (!user?.roles.includes('gerente')) return null
+  if (!hasRole(user, 'gerente')) return null
   if (order.status !== 'novo' && order.status !== 'preparo') return null
 
   if (order.priorityAt) {

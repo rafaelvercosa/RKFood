@@ -12,13 +12,42 @@ import type {
   OrderStatus, PaymentMethod, Product, ServiceMode, User,
 } from '../types'
 import { METHOD_LABEL, STATUS_LABEL } from '../types'
-import { commit } from './store'
+import { commit, getDB } from './store'
 import { customerBalance, identLabel, needsKitchen, orderRemaining, orderTotal } from './selectors'
 
 function findOrder(d: Database, id: string): Order {
   const o = d.orders.find((x) => x.id === id)
   if (!o) throw new Error('Pedido não encontrado')
   return o
+}
+
+const userName = (d: Database, id: string) => d.users.find((u) => u.id === id)?.name ?? 'desconhecido'
+
+/**
+ * Autorização por PIN (cancelamento: gerente ou dono; cortesia: só dono).
+ * A recusa fica no histórico antes do erro, igual a private.authorize no banco.
+ */
+function authorize(userId: string, pin: string, role: 'gerente' | 'dono', what: string): User {
+  const u = getDB().users.find((x) => !x.deletedAt && pin !== '' && x.pin === pin)
+  if (u && (u.roles.includes('dono') || (role === 'gerente' && u.roles.includes('gerente')))) return u
+  commit(userId, 'autorizacao.negada', () => `Autorização negada (${what}): ${u ? `PIN de ${u.name}, que não é ${role}` : 'PIN errado'}`)
+  throw new Error(role === 'dono'
+    ? 'PIN do dono incorreto. Cortesia só com o PIN do dono.'
+    : 'PIN de gerente incorreto. O cancelamento precisa do PIN de um gerente.')
+}
+
+// ---------------------------------------------------------------- Entrada e saída por PIN
+
+export function logPinLogin(user: User): void {
+  commit(user.id, 'pin.entrar', () => `Entrou com o PIN: ${user.name}`)
+}
+
+export function logPinLogout(userId: string): void {
+  commit(userId, 'pin.sair', (d) => `Saiu: ${userName(d, userId)}`)
+}
+
+export function logWrongPin(): void {
+  commit('', 'pin.errado', () => 'PIN errado ao entrar')
 }
 
 function pushStatus(o: Order, status: OrderStatus, userId: string): void {
@@ -59,6 +88,7 @@ export function createOrder(userId: string, input: NewOrderInput): Order {
       items: input.items.map((i) => ({ ...i, id: newId() })),
       statusHistory: [{ status: initial, at, by: userId }],
       cancelReason: null,
+      cancelAuthorizedBy: null,
       priorityAt: null,
       priorityReason: null,
     }
@@ -79,13 +109,20 @@ export function setOrderStatus(userId: string, orderId: string, status: OrderSta
   })
 }
 
-export function cancelOrder(userId: string, orderId: string, reason: string): void {
+/** Cancelar exige o PIN de um gerente (ou dono), digitado na hora. */
+export function cancelOrder(userId: string, orderId: string, reason: string, authPin: string): void {
   if (!reason.trim()) throw new Error('Informe o motivo do cancelamento')
+  const db = getDB()
+  const cur = findOrder(db, orderId)
+  if (cur.status === 'cancelado') throw new Error('Pedido já está cancelado')
+  if (db.payments.some((p) => p.orderId === orderId)) throw new Error('Pedido já tem pagamento registrado e não pode ser cancelado')
+  const approver = authorize(userId, authPin, 'gerente', `cancelar pedido nº ${cur.number}, ${identLabel(cur)}`)
   commit(userId, 'pedido.cancelar', (d) => {
     const o = findOrder(d, orderId)
     o.cancelReason = reason.trim()
+    o.cancelAuthorizedBy = approver.id
     pushStatus(o, 'cancelado', userId)
-    return `Pedido nº ${o.number} cancelado: ${reason.trim()}`
+    return `Pedido nº ${o.number} (${identLabel(o)}) cancelado por ${userName(d, userId)}, autorizado por ${approver.name}: ${reason.trim()}`
   })
 }
 
@@ -115,9 +152,16 @@ export interface PaymentInput {
   customerId?: string | null
 }
 
-export function payOrder(userId: string, orderId: string, payments: PaymentInput[]): void {
+/** Com cortesia em alguma parte, authPin precisa ser o PIN do dono. */
+export function payOrder(userId: string, orderId: string, payments: PaymentInput[], authPin = ''): void {
   const parts = payments.filter((p) => p.amount > 0)
   if (parts.length === 0) throw new Error('Informe o valor recebido')
+  const approver = parts.some((p) => p.method === 'cortesia')
+    ? (() => {
+        const o = findOrder(getDB(), orderId)
+        return authorize(userId, authPin, 'dono', `cortesia no pedido nº ${o.number}, ${identLabel(o)}`)
+      })()
+    : null
   commit(userId, 'pedido.pagar', (d) => {
     const o = findOrder(d, orderId)
     if (o.status === 'cancelado') throw new Error('Pedido cancelado')
@@ -143,13 +187,15 @@ export function payOrder(userId: string, orderId: string, payments: PaymentInput
         customerId: p.method === 'fiado' ? (p.customerId ?? null) : null,
         createdAt: nowIso(),
         createdBy: userId,
+        authorizedBy: p.method === 'cortesia' ? approver!.id : null,
       })
     }
     // Se a casa cobra antes, o pedido só vai para a cozinha quando estiver pago.
     if (o.status === 'aguardando_pagamento' && orderRemaining(d, o) === 0) {
       pushStatus(o, needsKitchen(o) ? 'novo' : 'pronto', userId)
     }
-    return `Pedido nº ${o.number}: ${parts.map((p) => `${METHOD_LABEL[p.method]} ${brl(p.amount)}`).join(' + ')}`
+    return `Pedido nº ${o.number} (${identLabel(o)}): ${parts.map((p) => `${METHOD_LABEL[p.method]} ${brl(p.amount)}`).join(' + ')}` +
+      (approver ? ` (cortesia autorizada por ${approver.name})` : '')
   })
 }
 
@@ -244,9 +290,17 @@ function trashList(d: Database, kind: Trashable): (Category | Product | Customer
   return d[kind]
 }
 
+const isManager = (u: User) => u.roles.includes('gerente') || u.roles.includes('dono')
+
 function managerCount(d: Database): number {
-  return d.users.filter((u) => !u.deletedAt && u.roles.includes('gerente')).length
+  return d.users.filter((u) => !u.deletedAt && isManager(u)).length
 }
+
+function ownerCount(d: Database): number {
+  return d.users.filter((u) => !u.deletedAt && u.roles.includes('dono')).length
+}
+
+const isOwner = (d: Database, userId: string) => !!d.users.find((u) => u.id === userId)?.roles.includes('dono')
 
 export function moveToTrash(userId: string, kind: Trashable, id: string): void {
   commit(userId, `${kind}.excluir`, (d) => {
@@ -254,7 +308,9 @@ export function moveToTrash(userId: string, kind: Trashable, id: string): void {
     if (!cur) throw new Error('Registro não encontrado')
     if (kind === 'users') {
       if (id === userId) throw new Error('Você não pode excluir o próprio usuário')
-      if ((cur as User).roles.includes('gerente') && managerCount(d) === 1) throw new Error('É preciso ter pelo menos um gerente')
+      if ((cur as User).roles.includes('dono') && !isOwner(d, userId)) throw new Error('Só o dono pode excluir ou restaurar outro dono')
+      if ((cur as User).roles.includes('dono') && ownerCount(d) === 1) throw new Error('É preciso ter pelo menos um dono')
+      if (isManager(cur as User) && managerCount(d) === 1) throw new Error('É preciso ter pelo menos um gerente')
     }
     cur.deletedAt = nowIso()
     return `${TRASH_LABEL[kind]} "${cur.name}" movido para a lixeira`
@@ -265,6 +321,8 @@ export function restoreFromTrash(userId: string, kind: Trashable, id: string): v
   commit(userId, `${kind}.restaurar`, (d) => {
     const cur = trashList(d, kind).find((x) => x.id === id)
     if (!cur) throw new Error('Registro não encontrado')
+    if (kind === 'users' && (cur as User).roles.includes('dono') && !isOwner(d, userId))
+      throw new Error('Só o dono pode excluir ou restaurar outro dono')
     if (kind === 'users' && d.users.some((u) => !u.deletedAt && u.pin === (cur as User).pin))
       throw new Error('Outro usuário já usa o mesmo PIN. Altere o PIN antes de restaurar.')
     cur.deletedAt = null
@@ -293,13 +351,17 @@ export function saveUser(userId: string, u: UserInput): void {
   if (!/^\d{4,6}$/.test(u.pin)) throw new Error('O PIN deve ter de 4 a 6 números')
   if (u.roles.length === 0) throw new Error('Escolha pelo menos um perfil')
   commit(userId, u.id ? 'usuario.editar' : 'usuario.criar', (d) => {
+    if (u.roles.includes('dono') && !isOwner(d, userId)) throw new Error('Só o dono pode dar o perfil de dono')
     // Um PIN não pode começar com outro (ex.: 1234 e 123456), senão o login entraria no usuário errado.
     if (d.users.some((x) => !x.deletedAt && x.id !== u.id && (x.pin.startsWith(u.pin) || u.pin.startsWith(x.pin))))
       throw new Error('Esse PIN já está em uso (ou começa igual ao de outro usuário)')
     if (u.id) {
       const cur = d.users.find((x) => x.id === u.id)
       if (!cur) throw new Error('Usuário não encontrado')
-      if (cur.roles.includes('gerente') && !u.roles.includes('gerente') && managerCount(d) === 1)
+      if (cur.roles.includes('dono') && !isOwner(d, userId)) throw new Error('Só o dono pode alterar outro dono')
+      if (cur.roles.includes('dono') && !u.roles.includes('dono') && ownerCount(d) === 1)
+        throw new Error('É preciso ter pelo menos um dono')
+      if (isManager(cur) && !isManager({ ...cur, roles: u.roles }) && managerCount(d) === 1)
         throw new Error('É preciso ter pelo menos um gerente')
       Object.assign(cur, { ...u, name })
     } else {

@@ -46,7 +46,8 @@ export function seedDatabase(): Database {
       kitchenTargetMin: 15,
     },
     users: [
-      user('Dono', '1234', ['gerente', 'caixa', 'atendente', 'cozinha']),
+      user('Dono', '1234', ['dono', 'gerente', 'caixa', 'atendente', 'cozinha']),
+      user('Gerente', '5555', ['gerente']),
       user('Ana (atendente)', '1111', ['atendente']),
       user('Cozinha', '2222', ['cozinha']),
       user('Caixa', '3333', ['caixa']),

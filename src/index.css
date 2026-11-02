@@ -257,3 +257,6 @@ table.list td.right, table.list th.right { text-align: right; }
 .ticket.priority.late { outline-color: var(--danger); }
 .badge.prioridade { background: var(--corn); color: var(--corn-ink); }
 .btn-priority { border-color: var(--ink); }
+/* PIN de autorização (gerente cancela, dono dá cortesia) */
+.auth-pin { padding: 10px 12px; border-radius: var(--radius); background: var(--corn); color: var(--corn-ink); }
+.auth-pin input { font-size: 1.5rem; letter-spacing: 0.4em; text-align: center; max-width: 220px; }

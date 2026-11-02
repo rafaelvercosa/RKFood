@@ -77,6 +77,9 @@ export function currentUserId(): string {
   return u?.id ?? 'desconhecido'
 }
 
+/** Gerente e dono passam em tudo, menos no que é só do dono. Mesma regra de private.operator no banco. */
 export function hasRole(user: User | null, role: Role): boolean {
-  return !!user && (user.roles.includes(role) || user.roles.includes('gerente'))
+  if (!user) return false
+  if (user.roles.includes(role) || user.roles.includes('dono')) return true
+  return role !== 'dono' && user.roles.includes('gerente')
 }

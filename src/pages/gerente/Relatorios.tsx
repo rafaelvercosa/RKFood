@@ -23,7 +23,7 @@ export default function Relatorios() {
   )
 }
 
-const METHODS: PaymentMethod[] = ['pix', 'dinheiro', 'debito', 'credito', 'fiado']
+const METHODS: PaymentMethod[] = ['pix', 'dinheiro', 'debito', 'credito', 'fiado', 'cortesia']
 
 /** Resumo do dia: usado no fechamento do caixa e nos relatórios da gerência. */
 export function DailyReport({ date }: { date: string }) {
@@ -56,14 +56,14 @@ export function DailyReport({ date }: { date: string }) {
         <Stat label="Vendas" value={brl(s.sales)} />
         <Stat label="Pedidos" value={String(s.orderCount)} />
         <Stat label="Ticket médio" value={brl(s.averageTicket)} />
-        <Stat label="Entrada no caixa" value={brl(s.cashIn)} hint="Pagamentos recebidos + fiado recebido, sem contar o fiado concedido" />
+        <Stat label="Entrada no caixa" value={brl(s.cashIn)} hint="Pagamentos recebidos + fiado recebido, sem contar o fiado concedido nem a cortesia" />
       </div>
       <div className="card">
         <h3>Formas de pagamento</h3>
         <table className="list">
           <tbody>
             {METHODS.map((m) => (
-              <tr key={m}><td>{METHOD_LABEL[m]}{m === 'fiado' && <span className="muted small"> (vendido a prazo)</span>}</td><td className="right money">{brl(s.byMethod[m])}</td></tr>
+              <tr key={m}><td>{METHOD_LABEL[m]}{m === 'fiado' && <span className="muted small"> (vendido a prazo)</span>}{m === 'cortesia' && <span className="muted small"> (sem cobrança)</span>}</td><td className="right money">{brl(s.byMethod[m])}</td></tr>
             ))}
             <tr><td>Fiado recebido no dia</td><td className="right money">{brl(fiadoIn)}</td></tr>
             <tr><td>Ainda em aberto</td><td className={`right money ${s.openAmount ? 'neg' : ''}`}>{brl(s.openAmount)}</td></tr>

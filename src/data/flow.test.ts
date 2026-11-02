@@ -126,7 +126,7 @@ describe('relatório do dia', () => {
     const b = actions.createOrder(ctx.owner.id, { identType: 'mesa', identValue: '2', mode: 'local', notes: '', items: [item(ctx.refri, 1)] })
     actions.payOrder(ctx.owner.id, b.id, [{ method: 'fiado', amount: 600, customerId: ctx.joao.id }])
     const c = actions.createOrder(ctx.owner.id, { identType: 'mesa', identValue: '3', mode: 'local', notes: '', items: [item(ctx.carne, 5)] })
-    actions.cancelOrder(ctx.owner.id, c.id, 'cliente desistiu')
+    actions.cancelOrder(ctx.owner.id, c.id, 'cliente desistiu', '1234')
 
     const s = sel.dailySummary(getDB(), today())
     expect(s.orderCount).toBe(2)
@@ -149,10 +149,9 @@ describe('lixeira e histórico', () => {
     expect(getDB().audit[0]).toMatchObject({ userId: ctx.owner.id, action: 'products.restaurar' })
   })
 
-  it('não deixa ficar sem gerente nem PIN ambíguo', () => {
+  it('não deixa ficar sem dono nem PIN ambíguo', () => {
     const ctx = setup()
-    const other = getDB().users.find((u) => u.id !== ctx.owner.id)!
-    expect(() => actions.saveUser(other.id, { ...ctx.owner, roles: ['caixa'] })).toThrow('gerente')
+    expect(() => actions.saveUser(ctx.owner.id, { ...ctx.owner, roles: ['gerente'] })).toThrow('pelo menos um dono')
     expect(() => actions.saveUser(ctx.owner.id, { name: 'Novo', pin: '123456', roles: ['caixa'] })).toThrow('PIN')
   })
 })
@@ -221,5 +220,51 @@ describe('adiantar pedido na fila', () => {
     // pedido só de bebida já nasce pronto: não está na fila
     const bebida = actions.createOrder(owner.id, { identType: 'mesa', identValue: '5', mode: 'local', notes: '', items: [item(refri, 1)] })
     expect(() => actions.setOrderPriority(owner.id, bebida.id, true, 'teste')).toThrow('fila da cozinha')
+  })
+})
+
+describe('dono, autorização por PIN e histórico', () => {
+  const byName = (n: string) => getDB().users.find((u) => u.name.startsWith(n))!
+
+  it('só o dono dá, tira ou mexe no perfil de dono', () => {
+    const { owner } = setup()
+    const ger = byName('Gerente')
+    expect(owner.roles).toContain('dono')
+    expect(() => actions.saveUser(ger.id, { name: 'Outro', pin: '8888', roles: ['dono'] })).toThrow('Só o dono pode dar')
+    expect(() => actions.saveUser(ger.id, { ...owner, roles: ['gerente'] })).toThrow('Só o dono pode alterar')
+    expect(() => actions.moveToTrash(ger.id, 'users', owner.id)).toThrow('Só o dono pode excluir')
+    actions.saveUser(owner.id, { name: 'Sócio', pin: '8888', roles: ['dono'] })
+    expect(byName('Sócio').roles).toContain('dono')
+  })
+
+  it('cancelar exige PIN de gerente; a recusa fica no histórico', () => {
+    const { owner, carne } = setup()
+    const caixa = byName('Caixa')
+    const o = actions.createOrder(owner.id, { identType: 'mesa', identValue: '7', mode: 'local', notes: '', items: [item(carne, 1)] })
+    expect(() => actions.cancelOrder(caixa.id, o.id, 'foi embora', '3333')).toThrow('PIN de gerente incorreto')
+    expect(getDB().audit[0]).toMatchObject({ action: 'autorizacao.negada' })
+    expect(getDB().audit[0].summary).toContain('PIN de Caixa, que não é gerente')
+    expect(getDB().orders.find((x) => x.id === o.id)!.status).toBe('novo')
+    actions.cancelOrder(caixa.id, o.id, 'foi embora', '5555')
+    const salvo = getDB().orders.find((x) => x.id === o.id)!
+    expect(salvo.status).toBe('cancelado')
+    expect(salvo.cancelAuthorizedBy).toBe(byName('Gerente').id)
+    expect(getDB().audit[0].summary).toBe('Pedido nº 1 (Mesa 7) cancelado por Caixa, autorizado por Gerente: foi embora')
+  })
+
+  it('cortesia só com PIN do dono e fica fora da entrada no caixa', () => {
+    const { owner, carne } = setup()
+    const caixa = byName('Caixa')
+    const o = actions.createOrder(owner.id, { identType: 'nome', identValue: 'Seu Zé', mode: 'local', notes: '', items: [item(carne, 2)] })
+    const parts = [{ method: 'pix' as const, amount: 1000 }, { method: 'cortesia' as const, amount: 1000 }]
+    expect(() => actions.payOrder(caixa.id, o.id, parts, '5555')).toThrow('PIN do dono incorreto')
+    expect(getDB().payments.filter((p) => p.orderId === o.id)).toHaveLength(0)
+    actions.payOrder(caixa.id, o.id, parts, '1234')
+    expect(getDB().payments.find((p) => p.method === 'cortesia')!.authorizedBy).toBe(owner.id)
+    expect(getDB().audit[0].summary).toContain('(cortesia autorizada por Dono)')
+    const s = sel.dailySummary(getDB(), today())
+    expect(s.byMethod.cortesia).toBe(1000)
+    expect(s.cashIn).toBe(1000)
+    expect(s.openAmount).toBe(0)
   })
 })

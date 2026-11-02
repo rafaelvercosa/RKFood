@@ -2,7 +2,7 @@
 // Por serem puros, são cobertos por testes automatizados (selectors.test.ts).
 
 import { METHOD_LABEL } from '../types'
-import type { Customer, Database, Order, OrderStatus, Payment, PaymentMethod } from '../types'
+import type { CashMethod, Customer, Database, Order, OrderStatus, Payment, PaymentMethod } from '../types'
 
 export function orderTotal(order: Pick<Order, 'items'>): number {
   return order.items.reduce((sum, it) => sum + it.unitPrice * it.qty, 0)
@@ -142,13 +142,13 @@ export interface DailySummary {
   /** Soma dos pedidos não cancelados do dia. */
   sales: number
   averageTicket: number
-  /** Recebido em pedidos do dia, por forma de pagamento (fiado = vendido a prazo). */
+  /** Recebido em pedidos do dia, por forma de pagamento (fiado = vendido a prazo; cortesia = sem cobrança). */
   byMethod: Record<PaymentMethod, number>
   /** Pedidos do dia ainda sem pagamento completo. */
   openAmount: number
   /** Dívidas de fiado recebidas neste dia (de qualquer data). */
-  fiadoReceived: Record<Exclude<PaymentMethod, 'fiado'>, number>
-  /** Total que entrou de fato no caixa no dia (sem contar fiado concedido). */
+  fiadoReceived: Record<CashMethod, number>
+  /** Total que entrou de fato no caixa no dia (sem contar fiado concedido nem cortesia). */
   cashIn: number
   topProducts: { name: string; qty: number; total: number }[]
 }
@@ -157,7 +157,7 @@ export function dailySummary(db: Database, date: string): DailySummary {
   const orders = db.orders.filter((o) => o.businessDate === date)
   const valid = orders.filter((o) => o.status !== 'cancelado')
   const validIds = new Set(valid.map((o) => o.id))
-  const byMethod: DailySummary['byMethod'] = { pix: 0, credito: 0, debito: 0, dinheiro: 0, fiado: 0 }
+  const byMethod: DailySummary['byMethod'] = { pix: 0, credito: 0, debito: 0, dinheiro: 0, fiado: 0, cortesia: 0 }
   for (const p of db.payments) if (validIds.has(p.orderId)) byMethod[p.method] += p.amount
 
   const fiadoReceived: DailySummary['fiadoReceived'] = { pix: 0, credito: 0, debito: 0, dinheiro: 0 }

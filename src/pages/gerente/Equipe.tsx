@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { attempt, Modal } from '../../components/ui'
 import { moveToTrash, saveUser, type UserInput } from '../../data/api'
 import { isCloud } from '../../data/backend'
+import { hasRole, useCurrentUser } from '../../data/session'
 import { useDB } from '../../data/store'
 import { ROLE_LABEL, type Role, type User } from '../../types'
 
@@ -9,7 +10,8 @@ const ROLES: { role: Role; desc: string }[] = [
   { role: 'atendente', desc: 'Faz pedidos e entrega' },
   { role: 'cozinha', desc: 'Vê a fila e marca pronto' },
   { role: 'caixa', desc: 'Recebe pagamentos e fiado' },
-  { role: 'gerente', desc: 'Acesso total: cardápio, equipe, relatórios' },
+  { role: 'gerente', desc: 'Acesso total: cardápio, equipe, relatórios. Autoriza cancelamento' },
+  { role: 'dono', desc: 'Tudo do gerente, e é o único que autoriza cortesia e mexe em outro dono' },
 ]
 
 export default function Equipe() {
@@ -38,6 +40,10 @@ export default function Equipe() {
 
 function UserForm({ user, onClose }: { user: User | null; onClose: () => void }) {
   const [form, setForm] = useState<UserInput>(() => user ?? { name: '', pin: '', roles: ['atendente'] })
+  const me = useCurrentUser()
+  const iAmOwner = hasRole(me, 'dono')
+  // só o dono dá ou tira o perfil de dono, e só ele edita outro dono
+  const locked = !iAmOwner && !!user?.roles.includes('dono')
   const toggle = (r: Role) => setForm((f) => ({ ...f, roles: f.roles.includes(r) ? f.roles.filter((x) => x !== r) : [...f.roles, r] }))
   return (
     <Modal title={user ? 'Editar usuário' : 'Novo usuário'} onClose={onClose}>
@@ -50,11 +56,12 @@ function UserForm({ user, onClose }: { user: User | null; onClose: () => void })
         <legend className="small" style={{ fontWeight: 600, marginBottom: 6 }}>Perfis</legend>
         {ROLES.map(({ role, desc }) => (
           <label key={role} className="check">
-            <input type="checkbox" checked={form.roles.includes(role)} onChange={() => toggle(role)} />
+            <input type="checkbox" checked={form.roles.includes(role)} disabled={locked || (role === 'dono' && !iAmOwner)} onChange={() => toggle(role)} />
             <span><b>{ROLE_LABEL[role]}</b> <span className="muted small">— {desc}</span></span>
           </label>
         ))}
       </fieldset>
+      {locked && <p className="muted small">Só o dono pode alterar outro dono.</p>}
       <button className="btn-primary btn-lg" onClick={() => attempt(() => saveUser(form), 'Usuário salvo').then((ok) => ok && onClose())}>Salvar</button>
       {user && (
         <button className="btn-danger" onClick={() => attempt(() => moveToTrash('users', user.id), 'Usuário movido para a lixeira').then((ok) => ok && onClose())}>
