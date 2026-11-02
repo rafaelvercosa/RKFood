@@ -29,7 +29,7 @@ export function seedDatabase(): Database {
     id: newId(), categoryId: c.id, name, description, price, photoUrl: null, active: true, sendToKitchen, deletedAt: null,
   })
 
-  const user = (name: string, pin: string, roles: User['roles']): User => ({ id: newId(), name, pin, roles, deletedAt: null })
+  const user = (name: string, pin: string, roles: User['roles']): User => ({ id: newId(), name, pin, roles, deletedAt: null, phone: '', createdBy: null, blockedAt: null })
 
   const products = [
     prod(espetos, 'Carne', 1000, 'Alcatra temperada'),

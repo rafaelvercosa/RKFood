@@ -30,6 +30,7 @@ function load(): Database {
         parsed.establishment.tableCount ??= 10 // ... e antes da quantidade de mesas
         parsed.materials ??= [] // ... e antes da ficha técnica
         parsed.recipes ??= []
+        for (const u of parsed.users) { u.phone ??= ''; u.createdBy ??= null; u.blockedAt ??= null } // ... e antes do telefone
         // salva antes do perfil dono: o primeiro gerente vira dono (igual à migração do banco)
         if (!parsed.users.some((u) => u.roles.includes('dono'))) {
           parsed.users.find((u) => !u.deletedAt && u.roles.includes('gerente'))?.roles.push('dono')

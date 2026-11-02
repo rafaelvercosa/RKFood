@@ -216,7 +216,7 @@ async function reload(eid: string): Promise<void> {
 
   const [est, staff, categories, products, customers, settlements, fiadoPays, audit, materials, recipes] = await Promise.all([
     db.from('establishments').select('*').eq('id', eid).single(),
-    all<Row>((a, b) => db.from('staff').select('id, name, roles, deleted_at').eq(E, eid).range(a, b)),
+    all<Row>((a, b) => db.from('staff').select('id, name, roles, deleted_at, phone, created_by, blocked_at').eq(E, eid).range(a, b)),
     all<Row>((a, b) => db.from('categories').select('*').eq(E, eid).order('sort').range(a, b)),
     all<Row>((a, b) => db.from('products').select('*').eq(E, eid).order('name').range(a, b)),
     all<Row>((a, b) => db.from('customers').select('*').eq(E, eid).order('name').range(a, b)),
@@ -276,7 +276,9 @@ function toDatabase(r: {
     brandColor: r.est.brand_color, paymentTiming: r.est.payment_timing, phone: r.est.phone, address: r.est.address, pixKey: r.est.pix_key,
     kitchenTargetMin: r.est.kitchen_target_min, tableCount: r.est.table_count,
   }
-  const users: User[] = r.staff.map((s) => ({ id: s.id, name: s.name, pin: '', roles: s.roles, deletedAt: s.deleted_at }))
+  const users: User[] = r.staff.map((s) => ({
+    id: s.id, name: s.name, pin: '', roles: s.roles, deletedAt: s.deleted_at, phone: s.phone ?? '', createdBy: s.created_by, blockedAt: s.blocked_at,
+  }))
   const categories: Category[] = r.categories.map((c) => ({ id: c.id, name: c.name, sort: c.sort, deletedAt: c.deleted_at }))
   const products: Product[] = r.products.map((p) => ({
     id: p.id, categoryId: p.category_id, name: p.name, description: p.description, price: p.price_cents,

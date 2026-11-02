@@ -29,8 +29,8 @@ const userName = (d: Database, id: string) => d.users.find((u) => u.id === id)?.
  */
 function authorize(userId: string, pin: string, role: 'gerente' | 'dono', what: string): User {
   const u = getDB().users.find((x) => !x.deletedAt && pin !== '' && x.pin === pin)
-  if (u && (u.roles.includes('dono') || (role === 'gerente' && u.roles.includes('gerente')))) return u
-  commit(userId, 'autorizacao.negada', () => `Autorização negada (${what}): ${u ? `PIN de ${u.name}, que não é ${role}` : 'PIN errado'}`)
+  if (u && !u.blockedAt && (u.roles.includes('dono') || (role === 'gerente' && u.roles.includes('gerente')))) return u
+  commit(userId, 'autorizacao.negada', () => `Autorização negada (${what}): ${!u ? 'PIN errado' : u.blockedAt ? `PIN de ${u.name}, que está bloqueado` : `PIN de ${u.name}, que não é ${role}`}`)
   throw new Error(role === 'dono'
     ? 'PIN do dono incorreto. Cortesia só com o PIN do dono.'
     : 'PIN de gerente incorreto. O cancelamento precisa do PIN de um gerente.')
@@ -48,6 +48,10 @@ export function logPinLogout(userId: string): void {
 
 export function logWrongPin(): void {
   commit('', 'pin.errado', () => 'PIN errado ao entrar')
+}
+
+export function logBlockedPin(user: User): void {
+  commit(user.id, 'pin.bloqueado', () => `Tentou entrar com perfil bloqueado: ${user.name}`)
 }
 
 function pushStatus(o: Order, status: OrderStatus, userId: string): void {
@@ -290,12 +294,6 @@ function trashList(d: Database, kind: Trashable): (Category | Product | Customer
   return d[kind]
 }
 
-const isManager = (u: User) => u.roles.includes('gerente') || u.roles.includes('dono')
-
-function managerCount(d: Database): number {
-  return d.users.filter((u) => !u.deletedAt && isManager(u)).length
-}
-
 function ownerCount(d: Database): number {
   return d.users.filter((u) => !u.deletedAt && u.roles.includes('dono')).length
 }
@@ -307,10 +305,9 @@ export function moveToTrash(userId: string, kind: Trashable, id: string): void {
     const cur = trashList(d, kind).find((x) => x.id === id)
     if (!cur) throw new Error('Registro não encontrado')
     if (kind === 'users') {
+      if (!isOwner(d, userId)) throw new Error('Seu perfil não permite esta ação.')
       if (id === userId) throw new Error('Você não pode excluir o próprio usuário')
-      if ((cur as User).roles.includes('dono') && !isOwner(d, userId)) throw new Error('Só o dono pode excluir ou restaurar outro dono')
       if ((cur as User).roles.includes('dono') && ownerCount(d) === 1) throw new Error('É preciso ter pelo menos um dono')
-      if (isManager(cur as User) && managerCount(d) === 1) throw new Error('É preciso ter pelo menos um gerente')
     }
     cur.deletedAt = nowIso()
     return `${TRASH_LABEL[kind]} "${cur.name}" movido para a lixeira`
@@ -321,8 +318,7 @@ export function restoreFromTrash(userId: string, kind: Trashable, id: string): v
   commit(userId, `${kind}.restaurar`, (d) => {
     const cur = trashList(d, kind).find((x) => x.id === id)
     if (!cur) throw new Error('Registro não encontrado')
-    if (kind === 'users' && (cur as User).roles.includes('dono') && !isOwner(d, userId))
-      throw new Error('Só o dono pode excluir ou restaurar outro dono')
+    if (kind === 'users' && !isOwner(d, userId)) throw new Error('Seu perfil não permite esta ação.')
     if (kind === 'users' && d.users.some((u) => !u.deletedAt && u.pin === (cur as User).pin))
       throw new Error('Outro usuário já usa o mesmo PIN. Altere o PIN antes de restaurar.')
     cur.deletedAt = null
@@ -357,31 +353,46 @@ export function saveEstablishment(userId: string, e: Establishment): void {
   })
 }
 
-export type UserInput = Omit<User, 'id' | 'deletedAt'> & { id?: string }
+export type UserInput = Omit<User, 'id' | 'deletedAt' | 'createdBy' | 'blockedAt'> & { id?: string }
 
 export function saveUser(userId: string, u: UserInput): void {
   const name = u.name.trim()
   if (!name) throw new Error('Informe o nome')
   if (!/^\d{4,6}$/.test(u.pin)) throw new Error('O PIN deve ter de 4 a 6 números')
   if (u.roles.length === 0) throw new Error('Escolha pelo menos um perfil')
+  const phone = u.phone.replace(/\D/g, '')
+  if (phone && (phone.length < 10 || phone.length > 13)) throw new Error('Telefone inválido. Use DDD + número, ex.: 81 99999-0000')
   commit(userId, u.id ? 'usuario.editar' : 'usuario.criar', (d) => {
-    if (u.roles.includes('dono') && !isOwner(d, userId)) throw new Error('Só o dono pode dar o perfil de dono')
+    // o gerente só cria atendente; editar qualquer perfil é só do dono (igual ao banco)
+    if (!isOwner(d, userId)) {
+      if (u.id) throw new Error('Só o dono pode alterar um perfil')
+      if (u.roles.length !== 1 || u.roles[0] !== 'atendente') throw new Error('O gerente só cria perfil de atendente')
+    }
     // Um PIN não pode começar com outro (ex.: 1234 e 123456), senão o login entraria no usuário errado.
     if (d.users.some((x) => !x.deletedAt && x.id !== u.id && (x.pin.startsWith(u.pin) || u.pin.startsWith(x.pin))))
       throw new Error('Esse PIN já está em uso (ou começa igual ao de outro usuário)')
     if (u.id) {
       const cur = d.users.find((x) => x.id === u.id)
       if (!cur) throw new Error('Usuário não encontrado')
-      if (cur.roles.includes('dono') && !isOwner(d, userId)) throw new Error('Só o dono pode alterar outro dono')
       if (cur.roles.includes('dono') && !u.roles.includes('dono') && ownerCount(d) === 1)
         throw new Error('É preciso ter pelo menos um dono')
-      if (isManager(cur) && !isManager({ ...cur, roles: u.roles }) && managerCount(d) === 1)
-        throw new Error('É preciso ter pelo menos um gerente')
-      Object.assign(cur, { ...u, name })
+      Object.assign(cur, { ...u, name, phone })
     } else {
-      d.users.push({ ...u, name, id: newId(), deletedAt: null })
+      d.users.push({ ...u, name, phone, id: newId(), deletedAt: null, createdBy: userId, blockedAt: null })
     }
-    return `Usuário ${name} (${u.roles.join(', ')})`
+    return `Usuário ${name} (${u.roles.join(', ')}) ${u.id ? 'alterado' : 'criado'} por ${userName(d, userId)}`
+  })
+}
+
+/** Só o dono. Bloqueado não entra com o PIN nem autoriza nada. */
+export function setUserBlocked(userId: string, id: string, blocked: boolean): void {
+  commit(userId, blocked ? 'usuario.bloquear' : 'usuario.desbloquear', (d) => {
+    if (!isOwner(d, userId)) throw new Error('Seu perfil não permite esta ação.')
+    const u = d.users.find((x) => x.id === id)
+    if (!u) throw new Error('Usuário não encontrado')
+    if (blocked && id === userId) throw new Error('Você não pode bloquear o próprio perfil')
+    u.blockedAt = blocked ? nowIso() : null
+    return `Usuário ${u.name} ${blocked ? 'bloqueado' : 'desbloqueado'} por ${userName(d, userId)}`
   })
 }
 

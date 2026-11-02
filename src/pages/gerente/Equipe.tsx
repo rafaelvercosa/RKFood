@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { attempt, Modal } from '../../components/ui'
-import { moveToTrash, saveUser, type UserInput } from '../../data/api'
+import { moveToTrash, saveUser, setUserBlocked, type UserInput } from '../../data/api'
 import { isCloud } from '../../data/backend'
 import { hasRole, useCurrentUser } from '../../data/session'
 import { useDB } from '../../data/store'
@@ -10,64 +10,97 @@ const ROLES: { role: Role; desc: string }[] = [
   { role: 'atendente', desc: 'Faz pedidos e entrega' },
   { role: 'cozinha', desc: 'Vê a fila e marca pronto' },
   { role: 'caixa', desc: 'Recebe pagamentos e fiado' },
-  { role: 'gerente', desc: 'Acesso total: cardápio, equipe, relatórios. Autoriza cancelamento' },
-  { role: 'dono', desc: 'Tudo do gerente, e é o único que autoriza cortesia e mexe em outro dono' },
+  { role: 'gerente', desc: 'Cardápio, relatórios, adianta pedido e autoriza cancelamento. Cria atendentes' },
+  { role: 'dono', desc: 'Tudo, e é o único que altera, bloqueia e exclui perfis e autoriza cortesia' },
 ]
+
+/** "81988887777" → "(81) 98888-7777" */
+export function formatPhone(digits: string): string {
+  const d = digits.replace(/\D/g, '')
+  const local = d.length > 11 ? d.slice(-11) : d
+  if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`
+  if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`
+  return digits
+}
 
 export default function Equipe() {
   const db = useDB()
+  const me = useCurrentUser()
+  const isOwner = hasRole(me, 'dono')
   const [editing, setEditing] = useState<User | 'novo' | null>(null)
   const users = db.users.filter((u) => !u.deletedAt)
+  const nameOf = (id: string | null) => db.users.find((u) => u.id === id)?.name
   return (
     <div className="stack">
-      <button className="btn-primary" style={{ justifySelf: 'start' }} onClick={() => setEditing('novo')}>+ Novo usuário</button>
+      <button className="btn-primary" style={{ justifySelf: 'start' }} onClick={() => setEditing('novo')}>
+        {isOwner ? '+ Novo usuário' : '+ Novo atendente'}
+      </button>
       <div className="card">
         {users.map((u) => (
           <div key={u.id} className="list-item">
             <div className="grow">
-              <strong>{u.name}</strong>
+              <strong>{u.name}</strong> {u.blockedAt && <span className="badge atrasado">Bloqueado</span>}
               <div className="muted small">{u.roles.map((r) => ROLE_LABEL[r]).join(', ')}</div>
+              <div className="muted small">
+                {u.phone ? `📱 ${formatPhone(u.phone)}` : 'sem telefone'}
+                {nameOf(u.createdBy) && ` · criado por ${nameOf(u.createdBy)}`}
+              </div>
             </div>
-            <button className="btn-sm" onClick={() => setEditing(u)}>Editar</button>
+            {isOwner && <button className="btn-sm" onClick={() => setEditing(u)}>Editar</button>}
           </div>
         ))}
       </div>
-      <p className="muted small">Cada pessoa entra com o próprio PIN. Assim o histórico mostra quem fez cada pedido, pagamento ou alteração.</p>
-      {editing && <UserForm user={editing === 'novo' ? null : editing} onClose={() => setEditing(null)} />}
+      <p className="muted small">
+        Cada pessoa entra com o próprio PIN. Assim o histórico mostra quem fez cada pedido, pagamento ou alteração.
+        {!isOwner && ' O gerente cria perfis de atendente; alterar, bloquear ou excluir é só com o dono.'}
+      </p>
+      {editing && <UserForm user={editing === 'novo' ? null : editing} isOwner={isOwner} onClose={() => setEditing(null)} />}
     </div>
   )
 }
 
-function UserForm({ user, onClose }: { user: User | null; onClose: () => void }) {
-  const [form, setForm] = useState<UserInput>(() => user ?? { name: '', pin: '', roles: ['atendente'] })
+function UserForm({ user, isOwner, onClose }: { user: User | null; isOwner: boolean; onClose: () => void }) {
   const me = useCurrentUser()
-  const iAmOwner = hasRole(me, 'dono')
-  // só o dono dá ou tira o perfil de dono, e só ele edita outro dono
-  const locked = !iAmOwner && !!user?.roles.includes('dono')
+  const [form, setForm] = useState<UserInput>(() =>
+    user ? { id: user.id, name: user.name, phone: user.phone, pin: user.pin, roles: user.roles } : { name: '', phone: '', pin: '', roles: ['atendente'] },
+  )
   const toggle = (r: Role) => setForm((f) => ({ ...f, roles: f.roles.includes(r) ? f.roles.filter((x) => x !== r) : [...f.roles, r] }))
+  const blocked = !!user?.blockedAt
   return (
-    <Modal title={user ? 'Editar usuário' : 'Novo usuário'} onClose={onClose}>
+    <Modal title={user ? 'Editar usuário' : isOwner ? 'Novo usuário' : 'Novo atendente'} onClose={onClose}>
       <label className="field">Nome *<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+      <label className="field">WhatsApp (com DDD)
+        <input inputMode="tel" placeholder="81 99999-0000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+      </label>
       <label className="field">PIN (4 a 6 números){user && isCloud ? '' : ' *'}
         <input inputMode="numeric" maxLength={6} value={form.pin} placeholder={user && isCloud ? 'Deixe em branco para manter o PIN atual' : ''}
           onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })} />
       </label>
-      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-        <legend className="small" style={{ fontWeight: 600, marginBottom: 6 }}>Perfis</legend>
-        {ROLES.map(({ role, desc }) => (
-          <label key={role} className="check">
-            <input type="checkbox" checked={form.roles.includes(role)} disabled={locked || (role === 'dono' && !iAmOwner)} onChange={() => toggle(role)} />
-            <span><b>{ROLE_LABEL[role]}</b> <span className="muted small">— {desc}</span></span>
-          </label>
-        ))}
-      </fieldset>
-      {locked && <p className="muted small">Só o dono pode alterar outro dono.</p>}
-      <button className="btn-primary btn-lg" onClick={() => attempt(() => saveUser(form), 'Usuário salvo').then((ok) => ok && onClose())}>Salvar</button>
-      {user && (
-        <button className="btn-danger" onClick={() => attempt(() => moveToTrash('users', user.id), 'Usuário movido para a lixeira').then((ok) => ok && onClose())}>
-          Excluir usuário
-        </button>
+      {isOwner ? (
+        <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend className="small" style={{ fontWeight: 600, marginBottom: 6 }}>Perfis</legend>
+          {ROLES.map(({ role, desc }) => (
+            <label key={role} className="check">
+              <input type="checkbox" checked={form.roles.includes(role)} onChange={() => toggle(role)} />
+              <span><b>{ROLE_LABEL[role]}</b> <span className="muted small">— {desc}</span></span>
+            </label>
+          ))}
+        </fieldset>
+      ) : (
+        <p className="muted small">Perfil: <b>Atendente</b>. Para dar outras permissões, fale com o dono.</p>
       )}
+      <button className="btn-primary btn-lg" onClick={() => attempt(() => saveUser(form), 'Usuário salvo').then((ok) => ok && onClose())}>Salvar</button>
+      {user && isOwner && user.id !== me?.id && (
+        <div className="row">
+          <button className="grow" onClick={() => attempt(() => setUserBlocked(user.id, !blocked), blocked ? 'Usuário desbloqueado' : 'Usuário bloqueado').then((ok) => ok && onClose())}>
+            {blocked ? '🔓 Desbloquear' : '🔒 Bloquear acesso'}
+          </button>
+          <button className="btn-danger grow" onClick={() => attempt(() => moveToTrash('users', user.id), 'Usuário movido para a lixeira').then((ok) => ok && onClose())}>
+            Excluir usuário
+          </button>
+        </div>
+      )}
+      {user && isOwner && <p className="muted small">Bloqueado não entra com o PIN, sai na hora de qualquer aparelho e não autoriza cancelamento nem cortesia.</p>}
     </Modal>
   )
 }

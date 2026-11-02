@@ -152,7 +152,7 @@ describe('lixeira e histórico', () => {
   it('não deixa ficar sem dono nem PIN ambíguo', () => {
     const ctx = setup()
     expect(() => actions.saveUser(ctx.owner.id, { ...ctx.owner, roles: ['gerente'] })).toThrow('pelo menos um dono')
-    expect(() => actions.saveUser(ctx.owner.id, { name: 'Novo', pin: '123456', roles: ['caixa'] })).toThrow('PIN')
+    expect(() => actions.saveUser(ctx.owner.id, { name: 'Novo', phone: '', pin: '123456', roles: ['caixa'] })).toThrow('PIN')
   })
 })
 
@@ -230,10 +230,10 @@ describe('dono, autorização por PIN e histórico', () => {
     const { owner } = setup()
     const ger = byName('Gerente')
     expect(owner.roles).toContain('dono')
-    expect(() => actions.saveUser(ger.id, { name: 'Outro', pin: '8888', roles: ['dono'] })).toThrow('Só o dono pode dar')
-    expect(() => actions.saveUser(ger.id, { ...owner, roles: ['gerente'] })).toThrow('Só o dono pode alterar')
-    expect(() => actions.moveToTrash(ger.id, 'users', owner.id)).toThrow('Só o dono pode excluir')
-    actions.saveUser(owner.id, { name: 'Sócio', pin: '8888', roles: ['dono'] })
+    expect(() => actions.saveUser(ger.id, { name: 'Outro', phone: '', pin: '8888', roles: ['dono'] })).toThrow('só cria perfil de atendente')
+    expect(() => actions.saveUser(ger.id, { ...owner, roles: ['gerente'] })).toThrow('Só o dono pode alterar um perfil')
+    expect(() => actions.moveToTrash(ger.id, 'users', owner.id)).toThrow('perfil não permite')
+    actions.saveUser(owner.id, { name: 'Sócio', phone: '', pin: '8888', roles: ['dono'] })
     expect(byName('Sócio').roles).toContain('dono')
   })
 
@@ -370,5 +370,25 @@ describe('desempenho: vendas por pessoa e tempo de saída', () => {
     expect(s.delivery).toEqual({ count: 2, avg: 21 * 60 })
     expect(rep.formatDuration(754)).toBe('12 min 34 s')
     expect(rep.formatDuration(45)).toBe('45 s')
+  })
+})
+
+describe('perfis da equipe', () => {
+  it('gerente só cria atendente; dono edita e bloqueia; bloqueado não autoriza', () => {
+    const { owner, carne } = setup()
+    const ger = getDB().users.find((u) => u.name === 'Gerente')!
+    actions.saveUser(ger.id, { name: 'Bia', phone: '(81) 98888-7777', pin: '7777', roles: ['atendente'] })
+    const bia = getDB().users.find((u) => u.name === 'Bia')!
+    expect(bia).toMatchObject({ phone: '81988887777', createdBy: ger.id, blockedAt: null })
+    expect(getDB().audit[0].summary).toBe('Usuário Bia (atendente) criado por Gerente')
+    expect(() => actions.saveUser(ger.id, { name: 'Caio', phone: '', pin: '7878', roles: ['caixa'] })).toThrow('só cria perfil de atendente')
+    expect(() => actions.saveUser(ger.id, { ...bia, name: 'Bia 2' })).toThrow('Só o dono pode alterar')
+    expect(() => actions.saveUser(owner.id, { name: 'Zé', phone: '123', pin: '7979', roles: ['atendente'] })).toThrow('Telefone inválido')
+    expect(() => actions.setUserBlocked(ger.id, bia.id, true)).toThrow('perfil não permite')
+    expect(() => actions.setUserBlocked(owner.id, owner.id, true)).toThrow('próprio perfil')
+    actions.setUserBlocked(owner.id, ger.id, true)
+    const o = actions.createOrder(owner.id, { identType: 'mesa', identValue: '1', mode: 'local', notes: '', items: [item(carne, 1)] })
+    expect(() => actions.cancelOrder(owner.id, o.id, 'teste', '5555')).toThrow('PIN de gerente incorreto')
+    expect(getDB().audit[0].summary).toContain('PIN de Gerente, que está bloqueado')
   })
 })

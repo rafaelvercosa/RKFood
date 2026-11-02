@@ -46,6 +46,10 @@ export async function loginPin(pin: string): Promise<User> {
       demo.logWrongPin()
       throw new Error('PIN não encontrado')
     }
+    if (user.blockedAt) {
+      demo.logBlockedPin(user)
+      throw new Error('PIN não encontrado')
+    }
     demo.logPinLogin(user)
     setOperator(user.id, null)
     return user
@@ -56,7 +60,7 @@ export async function loginPin(pin: string): Promise<User> {
   const row = (data as { token: string; staff_id: string; name: string; roles: User['roles'] }[])[0]
   if (!row) throw new Error('PIN não encontrado')
   setOperator(row.staff_id, row.token)
-  return { id: row.staff_id, name: row.name, roles: row.roles, pin: '', deletedAt: null }
+  return { id: row.staff_id, name: row.name, roles: row.roles, pin: '', deletedAt: null, phone: '', createdBy: null, blockedAt: null }
 }
 
 export async function logoutOperator(): Promise<void> {
@@ -168,7 +172,13 @@ export async function saveEstablishment(e: Establishment): Promise<void> {
 /** No modo nuvem, PIN em branco ao editar mantém o PIN atual. */
 export async function saveUser(u: UserInput): Promise<void> {
   if (!isCloud) return demo.saveUser(uid(), u)
-  await rpc('save_staff', { p_id: u.id ?? null, p_name: u.name, p_pin: u.pin ? u.pin : null, p_roles: u.roles })
+  await rpc('save_staff', { p_id: u.id ?? null, p_name: u.name, p_phone: u.phone, p_pin: u.pin ? u.pin : null, p_roles: u.roles })
+}
+
+/** Só o dono. Perfil bloqueado não entra com o PIN nem autoriza nada. */
+export async function setUserBlocked(id: string, blocked: boolean): Promise<void> {
+  if (!isCloud) return demo.setUserBlocked(uid(), id, blocked)
+  await rpc('set_staff_blocked', { p_id: id, p_blocked: blocked })
 }
 
 // ---------------------------------------------------------------- fotos

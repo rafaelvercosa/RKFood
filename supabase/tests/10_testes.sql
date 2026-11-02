@@ -80,10 +80,10 @@ declare
 begin
   perform public.save_product(t, null, cat, 'Carne', 'Alcatra', 1000, null, true, true);
   perform public.save_product(t, null, beb, 'Refri', '', 600, null, true, false);
-  perform public.save_staff(t, null, 'Ana', '1111', array['atendente']);
-  perform public.save_staff(t, null, 'Caixa', '3333', array['caixa']);
+  perform public.save_staff(t, null, 'Ana', '', '1111', array['atendente']);
+  perform public.save_staff(t, null, 'Caixa', '', '3333', array['caixa']);
   begin
-    perform public.save_staff(t, null, 'Repetido', '1111', array['caixa']);
+    perform public.save_staff(t, null, 'Repetido', '', '1111', array['caixa']);
     raise exception 'PIN repetido deveria falhar';
   exception when others then
     assert sqlerrm = 'Esse PIN já está em uso', sqlerrm;
@@ -209,7 +209,7 @@ do $$
 declare ta uuid := (select v::uuid from ctx where k = 'ta');
 begin
   assert (select 'dono' = any (roles) from public.staff where name = 'Dono A'), 'cadastro inicial deveria criar o dono';
-  perform public.save_staff(ta, null, 'Gerente G', '5555', array['gerente']);
+  perform public.save_staff(ta, null, 'Gerente G', '', '5555', array['gerente']);
 end $$;
 insert into ctx select 'tg', token::text from public.operator_login((select v::uuid from ctx where k = 'ea'), '5555');
 
@@ -220,19 +220,19 @@ declare
   dono uuid := (select id from public.staff where name = 'Dono A');
 begin
   begin
-    perform public.save_staff(tg, null, 'Outro', '6666', array['dono']);
+    perform public.save_staff(tg, null, 'Outro', '', '6666', array['dono']);
     raise exception 'gerente não deveria criar dono';
-  exception when others then assert sqlerrm = 'Só o dono pode dar o perfil de dono', sqlerrm; end;
+  exception when others then assert sqlerrm = 'O gerente só cria perfil de atendente', sqlerrm; end;
   begin
-    perform public.save_staff(tg, dono, 'Dono A', null, array['gerente']);
+    perform public.save_staff(tg, dono, 'Dono A', '', null, array['gerente']);
     raise exception 'gerente não deveria alterar o dono';
-  exception when others then assert sqlerrm = 'Só o dono pode alterar outro dono', sqlerrm; end;
+  exception when others then assert sqlerrm = 'Só o dono pode alterar um perfil', sqlerrm; end;
   begin
     perform public.set_trashed(tg, 'users', dono, true);
     raise exception 'gerente não deveria excluir o dono';
-  exception when others then assert sqlerrm like 'Só o dono pode excluir%', sqlerrm; end;
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
   begin
-    perform public.save_staff(ta, dono, 'Dono A', null, array['gerente']);
+    perform public.save_staff(ta, dono, 'Dono A', '', null, array['gerente']);
     raise exception 'não pode ficar sem dono';
   exception when others then assert sqlerrm = 'É preciso ter pelo menos um dono', sqlerrm; end;
   -- gerente comum continua podendo mexer no cardápio
@@ -308,6 +308,47 @@ begin
   assert (select brand_color = '#000000' and slogan = 'Novo slogan' from public.establishments), 'dono muda a aparência';
   assert exists (select 1 from public.audit_log where summary like '%mesas: 10 → 25%'), 'mudança de mesas no histórico';
   raise notice 'OK mesas pelo gerente ou dono; aparência só pelo dono';
+end $$;
+
+-- Perfis: gerente só cria atendente; dono bloqueia
+do $$
+declare
+  ta uuid := (select v::uuid from ctx where k = 'ta');
+  tg uuid := (select v::uuid from ctx where k = 'tg');
+  ger uuid := (select id from public.staff where name = 'Gerente G');
+  dono uuid := (select id from public.staff where name = 'Dono A');
+  nova uuid;
+begin
+  perform public.save_staff(tg, null, 'Bia', '(81) 98888-7777', '7777', array['atendente']);
+  select id into nova from public.staff where name = 'Bia';
+  assert (select phone = '81988887777' and created_by = ger from public.staff where id = nova), 'telefone e criado por';
+  assert exists (select 1 from public.audit_log where summary = 'Usuário Bia (atendente) criado por Gerente G'), 'quem criou no histórico';
+  begin
+    perform public.save_staff(tg, null, 'Caio', '', '7878', array['caixa']);
+    raise exception 'gerente não deveria criar caixa';
+  exception when others then assert sqlerrm = 'O gerente só cria perfil de atendente', sqlerrm; end;
+  begin
+    perform public.save_staff(tg, nova, 'Bia', '', null, array['atendente']);
+    raise exception 'gerente não deveria editar perfil';
+  exception when others then assert sqlerrm = 'Só o dono pode alterar um perfil', sqlerrm; end;
+  begin
+    perform public.save_staff(ta, null, 'Zé', '123', '7979', array['atendente']);
+    raise exception 'telefone curto deveria falhar';
+  exception when others then assert sqlerrm like 'Telefone inválido%', sqlerrm; end;
+  begin
+    perform public.set_staff_blocked(tg, nova, true);
+    raise exception 'gerente não deveria bloquear';
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
+  begin
+    perform public.set_staff_blocked(ta, dono, true);
+    raise exception 'não pode bloquear a si mesmo';
+  exception when others then assert sqlerrm = 'Você não pode bloquear o próprio perfil', sqlerrm; end;
+  perform public.set_staff_blocked(ta, nova, true);
+  assert (select count(*) from public.operator_login((select v::uuid from ctx where k = 'ea'), '7777')) = 0, 'bloqueado não entra';
+  assert exists (select 1 from public.audit_log where action = 'pin.bloqueado' and summary like '%Bia'), 'tentativa de bloqueado no histórico';
+  perform public.set_staff_blocked(ta, nova, false);
+  assert (select count(*) from public.operator_login((select v::uuid from ctx where k = 'ea'), '7777')) = 1, 'desbloqueado entra';
+  raise notice 'OK perfis: gerente só cria atendente; só o dono edita, bloqueia e exclui';
 end $$;
 
 -- Materiais e ficha técnica: só o dono

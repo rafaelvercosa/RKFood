@@ -40,6 +40,12 @@ export interface User {
   pin: string
   roles: Role[]
   deletedAt: string | null
+  /** Telefone com WhatsApp, só números (para mandar o link de acesso). */
+  phone: string
+  /** Quem criou o perfil. */
+  createdBy: string | null
+  /** Bloqueado pelo dono: não entra com o PIN nem autoriza nada. */
+  blockedAt: string | null
 }
 
 export interface Category {
