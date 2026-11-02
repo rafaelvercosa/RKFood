@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useDB } from '../data/store'
 import { logoutOperator as logout } from '../data/api'
 import { hasRole, useCurrentUser } from '../data/session'
+import { setClickSound, useClickSound } from '../lib/clickSound'
 import type { Role } from '../types'
 
 const AREAS: { role: Role; to: string; ico: string; label: string; desc: string }[] = [
@@ -16,6 +17,7 @@ const AREAS: { role: Role; to: string; ico: string; label: string; desc: string 
 export default function Home() {
   const est = useDB().establishment
   const user = useCurrentUser()
+  const clickSound = useClickSound()
   return (
     <>
       <section className="home-hero" style={est.coverUrl ? { backgroundImage: `url(${est.coverUrl})` } : undefined}>
@@ -48,6 +50,10 @@ export default function Home() {
             </div>
           </>
         )}
+        <label className="check" style={{ justifySelf: 'center' }}>
+          <input type="checkbox" checked={clickSound} onChange={(e) => setClickSound(e.target.checked)} />
+          Som dos botões neste aparelho
+        </label>
         <p className="muted small center">RKFood · pedidos, cozinha e caixa</p>
       </main>
     </>
