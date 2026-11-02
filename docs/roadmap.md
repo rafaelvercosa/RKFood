@@ -9,6 +9,8 @@
   por PIN, PIN errado, autorização negada e conexão de aparelho; quantidade de mesas configurável; aparência só
   pelo dono; **área do dono** com vendas por período (dia, semana, mês, datas), materiais, ficha técnica, custo e
   lucro estimados e lista de compras (repor o que foi consumido)
+- **Etapa 4 (nov/2026):** desempenho da equipe e tempos de saída; perfis com WhatsApp, "criado por" e bloqueio;
+  convite por link no WhatsApp que libera o celular da pessoa; lista de aparelhos com bloqueio
 
 ## Agora
 - Publicar: aplicar o banco no Supabase, cadastrar o primeiro estabelecimento, deploy na Vercel
