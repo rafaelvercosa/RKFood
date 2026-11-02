@@ -52,7 +52,9 @@
 
 ## Próximos passos (nesta ordem)
 1. Deploy na Vercel (`docs/implantacao.md`).
-2. Depois: o **modo contingência offline** e o servidor local na barraca (`docs/roadmap.md`), backups,
+2. Pedido do Rafael: **cancelar pedido só com PIN de gerente** e **pagamento como cortesia só com PIN do
+   dono** (detalhes em `docs/roadmap.md`).
+3. Depois: o **modo contingência offline** e o servidor local na barraca (`docs/roadmap.md`), backups,
    painel do administrador da plataforma, ficha técnica e lista de compras, relatórios por período.
 
 ## Mapa do código

@@ -36,6 +36,14 @@ Cenário real: internet de 4G **oscilando** com frequência e, às vezes, **hora
 
 **Recomendação operacional:** roteador 4G reserva com chip de outra operadora.
 
+### Autorização por PIN em ações sensíveis
+- **Cancelar pedido** só com o PIN de um **gerente**. Hoje o perfil caixa já cancela sozinho
+  (`cancel_order` exige `caixa`). Se quem estiver operando não for gerente, o app pede o PIN de um gerente
+  na hora, e o histórico registra quem autorizou.
+- **Pedido pago como cortesia** (nova forma de pagamento) só com o PIN do **dono**. Hoje não existe perfil
+  "dono", só atendente, cozinha, caixa e gerente. Será preciso criar essa marcação, por exemplo no usuário
+  criado pelo `bootstrap_establishment`. A cortesia deve aparecer separada nos relatórios.
+
 ### Outros
 - Backups automáticos diários (Google Drive + segundo local com bloqueio de exclusão)
 - Painel do administrador da plataforma (cadastrar estabelecimentos sem SQL, ativar/bloquear)
