@@ -79,6 +79,7 @@ Mais detalhes em [docs/arquitetura.md](docs/arquitetura.md).
 - [x] **Etapa 1:** pedido, cozinha, caixa, fiado, cardápio com fotos, personalização (modo demo)
 - [x] **Etapa 2:** Supabase multi-empresa, login do aparelho + PIN do operador, tempo real, fotos no Storage
 - [ ] Publicar na Vercel e validar com um estabelecimento real
+- [ ] **Modo contingência (offline):** fila de sincronização e servidor local na barraca. Ver [docs/roadmap.md](docs/roadmap.md)
 - [ ] **Etapa 3:** backups automáticos (Google Drive + segundo local) e painel do administrador da plataforma
 - [ ] **Etapa 4:** ficha técnica, consumo de material e lista de compras
 - [ ] **Etapa 5:** relatórios por período, gráficos e exportação para planilha
