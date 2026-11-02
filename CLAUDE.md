@@ -50,9 +50,17 @@
   Atkinson Hyperlegible (texto), embutidas via Fontsource; cores em `src/index.css` (fumaça, carvão, milho,
   lona azul, folha; `--brand` vem do estabelecimento); pedidos como comanda picotada (`.comanda`).
   Atendente com botões das mesas 1 a 10. Preview do modo demonstração: `rkfood-demo` (porta 5174, PIN 1234).
-- Ficaram dados de teste no banco: pedido nº 1 (mesa 5) e o cliente "Cliente Teste" com R$ 10 de fiado.
-- Ainda não testado na nuvem: cobrança `antes`, cancelamento de pedido, extrato em PDF/WhatsApp e dois
-  aparelhos físicos diferentes.
+- **Pedidos (02/11/2026)**: mesa ou nome em destaque e nº do pedido pequeno (`OrderIdent`); etiqueta
+  "Comer aqui"/"Para viagem"; cozinha com cronômetro por comanda, fila na ordem de chegada (com cobrança
+  `antes`, conta do pagamento), alerta de atrasados e tempo estimado em `establishments.kitchen_target_min`
+  (gerente muda em Gerência → Estabelecimento); **só o gerente** adianta pedido na fila, com motivo
+  (`orders.priority_at`/`priority_reason`, RPC `set_order_priority`). Migrações 4 e 5 aplicadas no Supabase
+  real e testadas na nuvem, inclusive o cancelamento de pedido.
+- Ficaram dados de teste no banco: pedidos de 01/11 (mesa 5) e de 02/11 (mesas 8 e 9, cancelados com
+  "Teste do sistema") e o cliente "Cliente Teste" com R$ 10 de fiado.
+- Ainda não testado na nuvem: cobrança `antes`, extrato em PDF/WhatsApp, dois aparelhos físicos diferentes
+  e a recusa de `set_order_priority` para quem não é gerente (testada só no modo demonstração).
+- O perfil **"dono"** ainda não existe; onde o Rafael pediu "gerente ou dono", hoje vale o gerente.
 
 ## Próximos passos (nesta ordem)
 1. Deploy na Vercel (`docs/implantacao.md`).
