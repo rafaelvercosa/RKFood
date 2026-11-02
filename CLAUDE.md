@@ -40,7 +40,7 @@
   **não deve ser pedida nem colada em conversa**.
 - **Banco aplicado no Supabase real (01/11/2026)** pelo MCP: as 3 migrações, o bucket `midia` e o Realtime.
   Cadastro aberto desligado em Auth. Primeiro estabelecimento: **Espetinho do Rafael** (conta
-  `rafaelkvercosa@gmail.com`, gerente Rafael), criado com `private.bootstrap_establishment`.
+  a do e-mail do Rafael, gerente Rafael), criado com `private.bootstrap_establishment`.
 - **Testado de ponta a ponta no Supabase real**, com `npm run dev` e duas abas: conectar aparelho, PIN,
   cardápio, pedido, cozinha em tempo real (nos dois sentidos), pagamento dividido (Pix + fiado), fiado com
   limite e recebimento parcial, relatório do dia, histórico e upload de foto. Tudo funcionou, inclusive o
