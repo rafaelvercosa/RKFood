@@ -219,3 +219,8 @@ table.list td.right, table.list th.right { text-align: right; }
 
 @media (prefers-reduced-motion: reduce) { button:active, .btn:active { transform: none; } }
 .keypad-key { font-family: var(--font-sign); font-weight: 800; font-size: 1.9rem; }
+/* atalhos das mesas 1 a 10 no atendente */
+.table-grid { display: grid; gap: 8px; grid-template-columns: repeat(5, 1fr); }
+@media (min-width: 640px) { .table-grid { grid-template-columns: repeat(10, 1fr); } }
+.table-grid button { min-height: 52px; padding: 0; font-family: var(--font-sign); font-weight: 800; font-size: 1.7rem; }
+.table-grid button.on { background: var(--ink); border-color: var(--ink); color: #fff; }

@@ -58,6 +58,9 @@ function useReadyWatcher(): number {
   return ready.length
 }
 
+// Atalhos das mesas mais usadas; mesa acima de 10 continua pelo campo de texto.
+const MESAS = Array.from({ length: 10 }, (_, i) => String(i + 1))
+
 function NewOrder({ onSent }: { onSent: () => void }) {
   const db = useDB()
   const categories = useMemo(() => db.categories.filter((c) => !c.deletedAt).sort((a, b) => a.sort - b.sort), [db.categories])
@@ -116,6 +119,15 @@ function NewOrder({ onSent }: { onSent: () => void }) {
               aria-label={identType === 'mesa' ? 'Número da mesa' : 'Nome do cliente'}
             />
           </div>
+          {identType === 'mesa' && (
+            <div className="table-grid" role="group" aria-label="Escolher mesa">
+              {MESAS.map((n) => (
+                <button key={n} type="button" className={identValue === n ? 'on' : ''} aria-pressed={identValue === n} onClick={() => setIdentValue(n)}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          )}
           <Segmented full value={mode} onChange={setMode} options={[{ value: 'local', label: '🍽️ Comer aqui' }, { value: 'viagem', label: '🛍️ Para viagem' }]} />
         </div>
 
