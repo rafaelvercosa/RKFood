@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { identLabel } from '../data/selectors'
+import type { Order } from '../types'
 
 // ---------------------------------------------------------------- Aviso rápido (toast)
 
@@ -117,4 +119,16 @@ export function useNow(ms = 30000): number {
     return () => clearInterval(t)
   }, [ms])
   return now
+}
+
+// ---------------------------------------------------------------- Identificação do pedido
+
+/** Mesa ou nome do cliente em destaque; o nº do pedido fica pequeno, só como referência. */
+export function OrderIdent({ order }: { order: Pick<Order, 'identType' | 'identValue' | 'number'> }) {
+  return (
+    <div className="ident">
+      <span className="ident-name">{identLabel(order)}</span>
+      <span className="ident-num">pedido nº {order.number}</span>
+    </div>
+  )
 }

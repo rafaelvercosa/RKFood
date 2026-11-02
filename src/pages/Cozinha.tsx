@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Header } from '../components/Layout'
-import { attempt, Segmented, useNow } from '../components/ui'
+import { attempt, OrderIdent, Segmented, useNow } from '../components/ui'
 import { setOrderStatus } from '../data/api'
 import { identLabel, isKitchenLate, KITCHEN_STATUSES, kitchenReadyAt, kitchenSeconds, kitchenSentAt, modeLabel, needsKitchen } from '../data/selectors'
 import { useDB } from '../data/store'
@@ -78,7 +78,7 @@ export default function Cozinha() {
 
         {late.length > 0 && (
           <div className="late-banner" role="alert">
-            ⚠ {late.length === 1 ? '1 pedido atrasado' : `${late.length} pedidos atrasados`}: nº {late.map((o) => o.number).join(', nº ')}
+            ⚠ {late.length === 1 ? '1 pedido atrasado' : `${late.length} pedidos atrasados`}: {late.map((o) => identLabel(o)).join(', ')}
           </div>
         )}
 
@@ -93,16 +93,13 @@ export default function Cozinha() {
               return (
                 <article key={o.id} className={`card comanda ticket ${o.status} ${isLate ? 'late' : ''}`}>
                   <div className="row between">
-                    <span className="num">nº {o.number}</span>
+                    <OrderIdent order={o} />
                     <span className="row" style={{ gap: 6 }}>
                       {filter === 'fila' && <span className="queue-pos" title="Ordem de chegada na cozinha">{idx + 1}º</span>}
                       <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
                     </span>
                   </div>
-                  <div className="row between">
-                    <strong>{identLabel(o)}</strong>
-                    <span className="muted">chegou {hhmm(kitchenSentAt(o))}</span>
-                  </div>
+                  <span className="muted small">chegou {hhmm(kitchenSentAt(o))}</span>
                   <KitchenTimer order={o} targetMin={targetMin} now={now} />
                   <ul>
                     {o.items.filter((i) => i.sendToKitchen).map((i) => (
@@ -195,8 +192,8 @@ export function printTicket(o: Order, est: Establishment, paperMm: number): void
     .join('')
   printHtml(
     `Comanda ${o.number}`,
-    `<div class="row"><span class="big">nº ${o.number}</span><b style="font-size:1.3em">${modeLabel(o)}</b></div>
-     <div style="font-size:1.2em"><b>${escapeHtml(identLabel(o))}</b></div>
+    `<div class="row"><span class="big">${escapeHtml(identLabel(o))}</span><b style="font-size:1.3em">${modeLabel(o)}</b></div>
+     <div style="font-size:1.1em">pedido nº ${o.number}</div>
      <div class="muted">${escapeHtml(est.name)} · ${hhmm(o.createdAt)}</div><hr>${items}
      ${o.notes ? `<hr><b>Obs.: ${escapeHtml(o.notes)}</b>` : ''}<hr>`,
     { widthMm: paperMm },

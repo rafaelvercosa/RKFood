@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CustomerForm } from '../components/CustomerForm'
 import { Header } from '../components/Layout'
-import { attempt, Modal, Segmented } from '../components/ui'
+import { attempt, Modal, OrderIdent, Segmented } from '../components/ui'
 import { cancelOrder, payOrder, setOrderStatus, type PaymentInput } from '../data/api'
 import { customerBalance, identLabel, modeLabel, orderPaid, orderPayments, orderRemaining, orderTotal } from '../data/selectors'
 import { useDB } from '../data/store'
@@ -51,7 +51,7 @@ function OrderList({ paid }: { paid: boolean }) {
         {orders.map((o) => (
           <button key={o.id} className={`card comanda ${o.status}`} style={{ display: 'block', textAlign: 'left', fontWeight: 400 }} onClick={() => setSelected(o.id)}>
             <div className="row between">
-              <div className="row"><span className="num">nº {o.number}</span><strong>{identLabel(o)}</strong></div>
+              <OrderIdent order={o} />
               <span className="money"><b>{brl(paid ? orderTotal(o) : orderRemaining(db, o))}</b></span>
             </div>
             <div className="row between small muted">
@@ -80,7 +80,7 @@ function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }
   const [reason, setReason] = useState('')
 
   return (
-    <Modal title={`Pedido nº ${o.number} · ${identLabel(o)}`} onClose={onClose}>
+    <Modal title={`${identLabel(o)} · pedido nº ${o.number}`} onClose={onClose}>
       <table className="list small">
         <tbody>
           {o.items.map((i) => (
