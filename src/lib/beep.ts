@@ -46,3 +46,29 @@ export function click(): void {
     // navegador sem áudio: ignora
   }
 }
+
+/** Alarme de pedido pronto: dois tons altos (como campainha), três vezes, e vibração longa. */
+export function alarm(): void {
+  try {
+    const a = audio()
+    const t0 = a.currentTime
+    for (let i = 0; i < 3; i++) {
+      for (const [j, freq] of [1318, 1046].entries()) {
+        const osc = a.createOscillator()
+        const gain = a.createGain()
+        osc.type = 'square'
+        osc.frequency.value = freq
+        const start = t0 + i * 0.7 + j * 0.25
+        gain.gain.setValueAtTime(0.0001, start)
+        gain.gain.exponentialRampToValueAtTime(0.35, start + 0.02)
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22)
+        osc.connect(gain).connect(a.destination)
+        osc.start(start)
+        osc.stop(start + 0.24)
+      }
+    }
+    navigator.vibrate?.([400, 150, 400, 150, 400])
+  } catch {
+    // navegador sem áudio: ignora
+  }
+}

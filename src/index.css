@@ -262,3 +262,19 @@ fieldset:disabled .btn[aria-disabled='true'] { opacity: 0.5; pointer-events: non
 .auth-pin input { font-size: 1.5rem; letter-spacing: 0.4em; text-align: center; max-width: 220px; }
 input:disabled, select:disabled, textarea:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; }
 table.list tr.group-row td { background: var(--bg); }
+
+/* aviso de pedido pronto no atendente: tela cheia, letra grande */
+.ready-alert { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgb(26 25 23 / 0.75); }
+.ready-alert-box { width: 100%; max-width: 520px; border-radius: 14px; background: var(--ok); color: #fff; padding: 22px 20px; display: grid; gap: 14px; box-shadow: 0 0 0 6px rgb(255 255 255 / 0.35); }
+.ready-alert-title { font-family: var(--font-sign); font-weight: 800; font-size: clamp(3.2rem, 14vw, 5rem); line-height: 1; }
+.ready-alert ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.ready-alert li { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: rgb(255 255 255 / 0.16); }
+.ready-alert-name { font-family: var(--font-sign); font-weight: 800; font-size: clamp(2.4rem, 11vw, 3.6rem); line-height: 1; }
+.ready-alert-meta { font-weight: 700; font-size: 1rem; opacity: 0.95; }
+.ready-alert p { font-size: 1.15rem; font-weight: 700; }
+.ready-alert-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ready-alert-actions .btn-ok { background: #fff; color: var(--ok); border-color: #fff; font-size: 1.3rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .ready-alert-box { animation: chega 0.35s ease-out; }
+  @keyframes chega { from { transform: scale(0.85); opacity: 0; } }
+}

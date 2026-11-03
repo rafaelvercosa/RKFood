@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PriorityButton } from '../components/Priority'
 import { Header } from '../components/Layout'
-import { attempt, Modal, OrderIdent, Photo, Segmented, toast, useNow } from '../components/ui'
+import { attempt, Modal, OrderIdent, Photo, Segmented, useNow } from '../components/ui'
 import { createOrder, setOrderStatus } from '../data/api'
 import { identLabel, isKitchenLate, isOrderPaid, modeLabel, orderTotal } from '../data/selectors'
 import { useDB } from '../data/store'
-import { beep } from '../lib/beep'
+import { alarm } from '../lib/beep'
 import { hhmm, minutesSince, today } from '../lib/dates'
 import { brl } from '../lib/money'
 import type { IdentType, Order, Product, ServiceMode } from '../types'
@@ -20,9 +20,12 @@ interface CartLine {
 
 export default function Atendente() {
   const [view, setView] = useState<'novo' | 'pedidos'>('novo')
-  const readyCount = useReadyWatcher()
+  const { readyCount, alert, dismiss } = useReadyWatcher()
   return (
     <>
+      {alert.length > 0 && (
+        <ReadyAlert orders={alert} onClose={dismiss} onShow={() => { dismiss(); setView('pedidos') }} />
+      )}
       <Header title="Atendimento" />
       <div className="page" style={{ paddingBottom: 0 }}>
         <Segmented
@@ -40,23 +43,68 @@ export default function Atendente() {
   )
 }
 
-/** Toca um aviso quando algum pedido fica pronto. Devolve quantos estão prontos para entregar. */
-function useReadyWatcher(): number {
+const ALARM_EVERY_MS = 8000
+const ALARM_TIMES = 4
+
+/**
+ * Quando um pedido fica pronto: aviso de tela cheia e alarme que repete (até 4 vezes)
+ * enquanto ninguém tocar em "Entendi". Devolve também quantos estão prontos para entregar.
+ */
+function useReadyWatcher(): { readyCount: number; alert: Order[]; dismiss: () => void } {
   const db = useDB()
   const ready = db.orders.filter((o) => o.businessDate === today() && o.status === 'pronto')
   const seen = useRef<Set<string> | null>(null)
+  const [alert, setAlert] = useState<Order[]>([])
   useEffect(() => {
     const ids = new Set(ready.map((o) => o.id))
     if (seen.current) {
       const fresh = ready.filter((o) => !seen.current!.has(o.id))
-      if (fresh.length) {
-        beep(3)
-        toast(`Pronto: ${fresh.map((o) => `${identLabel(o)} (nº ${o.number})`).join(', ')}`)
-      }
+      if (fresh.length) setAlert((a) => [...a, ...fresh.filter((f) => !a.some((x) => x.id === f.id))])
     }
     seen.current = ids
   }, [ready])
-  return ready.length
+
+  // pedido entregue por outro aparelho sai do aviso sozinho
+  const stillReady = alert.filter((o) => ready.some((r) => r.id === o.id))
+
+  // alarme: toca na hora e repete enquanto o aviso estiver na tela
+  const alerting = stillReady.length > 0
+  useEffect(() => {
+    if (!alerting) return
+    alarm()
+    let times = 1
+    const t = setInterval(() => {
+      if (++times > ALARM_TIMES) return clearInterval(t)
+      alarm()
+    }, ALARM_EVERY_MS)
+    return () => clearInterval(t)
+  }, [alerting, stillReady.length])
+
+  return { readyCount: ready.length, alert: stillReady, dismiss: () => setAlert([]) }
+}
+
+/** Aviso de tela cheia, com letra grande, para ver de longe e na correria. */
+function ReadyAlert({ orders, onClose, onShow }: { orders: Order[]; onClose: () => void; onShow: () => void }) {
+  return (
+    <div className="ready-alert" role="alertdialog" aria-modal="true" aria-labelledby="ready-alert-title">
+      <div className="ready-alert-box">
+        <div id="ready-alert-title" className="ready-alert-title">🔔 Pronto!</div>
+        <ul>
+          {orders.map((o) => (
+            <li key={o.id}>
+              <span className="ready-alert-name">{identLabel(o)}</span>
+              <span className="ready-alert-meta">pedido nº {o.number} · {modeLabel(o)}</span>
+            </li>
+          ))}
+        </ul>
+        <p>{orders.length === 1 ? 'Pode buscar na cozinha e levar para o cliente.' : 'Pode buscar na cozinha e levar para os clientes.'}</p>
+        <div className="ready-alert-actions">
+          <button className="btn-lg" onClick={onShow}>Ver pedidos</button>
+          <button className="btn-lg btn-ok" onClick={onClose} autoFocus>Entendi</button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 
