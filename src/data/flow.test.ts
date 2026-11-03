@@ -353,6 +353,19 @@ describe('área do dono: vendas, ficha técnica e compras', () => {
     expect(getDB().materials.filter((x) => x.name === 'Limoneto')).toHaveLength(1)
     expect(getDB().materials.find((x) => x.name === 'Limoneto')!.cost).toBe(350)
   })
+
+  it('comprado pronto na categoria inteira: troca as fichas e deixa de fora o material em kg', () => {
+    const { owner, carne } = setup()
+    const ger = getDB().users.find((u) => u.name === 'Gerente')!
+    expect(() => actions.saveReadyMadeCategory(ger.id, carne.categoryId)).toThrow('perfil')
+    // no exemplo, "Queijo coalho" é item e também material comprado por kg
+    expect(actions.saveReadyMadeCategory(owner.id, carne.categoryId)).toEqual(['Queijo coalho'])
+    const db = getDB()
+    const m = db.materials.find((x) => x.name === 'Carne')!
+    expect(m.unit).toBe('un')
+    expect(db.recipes.filter((r) => r.productId === carne.id)).toEqual([{ productId: carne.id, materialId: m.id, qty: 1 }])
+    expect(db.audit[0].summary).toMatch(/^Categoria Espetinhos marcada como comprada pronta: Carne, .* \(ficaram de fora: Queijo coalho\)$/)
+  })
 })
 
 describe('desempenho: vendas por pessoa e tempo de saída', () => {

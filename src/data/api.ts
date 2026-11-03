@@ -233,6 +233,12 @@ export async function saveReadyMade(productId: string, cost: number | null): Pro
   await rpc('save_ready_made', { p_product: productId, p_cost_cents: cost })
 }
 
+/** Só o dono. A categoria inteira como comprada pronta; devolve os itens que ficaram de fora. */
+export async function saveReadyMadeCategory(categoryId: string): Promise<string[]> {
+  if (!isCloud) return demo.saveReadyMadeCategory(uid(), categoryId)
+  return (await rpc<string[] | null>('save_ready_made_category', { p_category: categoryId })) ?? []
+}
+
 export async function setMaterialTrashed(id: string, trashed: boolean): Promise<void> {
   if (!isCloud) return demo.setMaterialTrashed(uid(), id, trashed)
   await rpc('set_material_trashed', { p_id: id, p_trashed: trashed })
