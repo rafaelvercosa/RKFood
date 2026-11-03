@@ -221,9 +221,16 @@ export type { PaymentMethod }
 
 // ---------------------------------------------------------------- área do dono
 
-export async function saveMaterial(m: MaterialInput): Promise<void> {
-  if (!isCloud) return void demo.saveMaterial(uid(), m)
-  await rpc('save_material', { p_id: m.id ?? null, p_name: m.name, p_unit: m.unit, p_cost_cents: m.cost })
+/** Devolve o id do material (para a ficha técnica já usar o material recém-criado). */
+export async function saveMaterial(m: MaterialInput): Promise<string> {
+  if (!isCloud) return demo.saveMaterial(uid(), m).id
+  return rpc<string>('save_material', { p_id: m.id ?? null, p_name: m.name, p_unit: m.unit, p_cost_cents: m.cost })
+}
+
+/** Só o dono. Item comprado pronto: material com o mesmo nome e ficha de 1 un, num passo só. */
+export async function saveReadyMade(productId: string, cost: number | null): Promise<void> {
+  if (!isCloud) return demo.saveReadyMade(uid(), productId, cost)
+  await rpc('save_ready_made', { p_product: productId, p_cost_cents: cost })
 }
 
 export async function setMaterialTrashed(id: string, trashed: boolean): Promise<void> {

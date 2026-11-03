@@ -449,6 +449,30 @@ export function setMaterialTrashed(userId: string, id: string, trashed: boolean)
 }
 
 /** Substitui a ficha técnica inteira de um item do cardápio. qty na unidade do material. */
+/**
+ * Item comprado pronto (refrigerante, limoneto): cria ou reaproveita o material com o nome
+ * do item, em unidade, e a ficha vira "1 un" dele. cost null mantém o custo de um material que já existe.
+ */
+export function saveReadyMade(userId: string, productId: string, cost: number | null): void {
+  if (cost !== null && (!Number.isInteger(cost) || cost < 0)) throw new Error('Custo inválido')
+  commit(userId, 'ficha.editar', (d) => {
+    requireOwner(d, userId)
+    const product = d.products.find((p) => p.id === productId && !p.deletedAt)
+    if (!product) throw new Error('Item do cardápio não encontrado')
+    const name = product.name.trim()
+    let m = d.materials.find((x) => !x.deletedAt && x.name.trim().toLowerCase() === name.toLowerCase())
+    if (m && m.unit !== 'un') throw new Error(`Já existe o material ${m.name} comprado por ${m.unit}. Use "Montar ficha".`)
+    if (!m) {
+      m = { id: newId(), name, unit: 'un', cost: cost ?? 0, deletedAt: null }
+      d.materials.push(m)
+    } else if (cost !== null) {
+      m.cost = cost
+    }
+    d.recipes = [...d.recipes.filter((r) => r.productId !== productId), { productId, materialId: m.id, qty: 1 }]
+    return `${product.name} marcado como comprado pronto: 1 un de ${m.name} (custo ${m.cost > 0 ? brl(m.cost) : 'não informado'})`
+  })
+}
+
 export function saveRecipe(userId: string, productId: string, items: { materialId: string; qty: number }[]): void {
   commit(userId, 'ficha.editar', (d) => {
     requireOwner(d, userId)

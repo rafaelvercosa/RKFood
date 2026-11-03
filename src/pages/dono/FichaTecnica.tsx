@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { attempt, Modal } from '../../components/ui'
-import { saveRecipe } from '../../data/api'
+import { attempt, Modal, Segmented } from '../../components/ui'
+import { saveMaterial, saveReadyMade, saveRecipe } from '../../data/api'
 import { formatQty, hasRecipe, productCost } from '../../data/reports'
 import { useDB } from '../../data/store'
-import { brl } from '../../lib/money'
-import type { Material, Product } from '../../types'
+import { brl, centsToInput, parseBRL } from '../../lib/money'
+import type { Material, MaterialUnit, Product } from '../../types'
 
 // Na ficha, quilo e litro são digitados em gramas e mililitros (é como se pensa um espetinho).
 const INPUT_UNIT: Record<Material['unit'], string> = { kg: 'g', l: 'ml', un: 'un' }
@@ -17,6 +17,7 @@ const fromInput = (m: Material, text: string) => {
 export default function FichaTecnica() {
   const db = useDB()
   const [editing, setEditing] = useState<Product | null>(null)
+  const [readyMade, setReadyMade] = useState<Product | null>(null)
   const categories = db.categories.filter((c) => !c.deletedAt).sort((a, b) => a.sort - b.sort)
   const missing = db.products.filter((p) => !p.deletedAt && !hasRecipe(db, p.id)).length
   return (
@@ -25,9 +26,9 @@ export default function FichaTecnica() {
         Diga quanto cada item gasta de cada material. Com isso o app calcula o custo de cada item, o lucro estimado e a lista de compras.
         {missing > 0 && <> <b>{missing} {missing === 1 ? 'item ainda não tem' : 'itens ainda não têm'} ficha.</b></>}
       </p>
-      {db.materials.filter((m) => !m.deletedAt).length === 0 && (
-        <div className="card">Primeiro cadastre os materiais na aba <b>Materiais</b>.</div>
-      )}
+      <p className="muted small">
+        Bebida ou item que já vem pronto? Toque em <b>Comprado pronto</b> e diga quanto paga por um: o app cria o material e a ficha sozinho.
+      </p>
       {categories.map((c) => {
         const products = db.products.filter((p) => p.categoryId === c.id && !p.deletedAt).sort((a, b) => a.name.localeCompare(b.name))
         if (products.length === 0) return null
@@ -54,7 +55,10 @@ export default function FichaTecnica() {
                       </div>
                     )}
                   </div>
-                  <button className="btn-sm" onClick={() => setEditing(p)}>{rows.length ? 'Editar' : 'Montar ficha'}</button>
+                  <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                    {rows.length === 0 && <button className="btn-sm" onClick={() => setReadyMade(p)}>Comprado pronto</button>}
+                    <button className="btn-sm" onClick={() => setEditing(p)}>{rows.length ? 'Editar' : 'Montar ficha'}</button>
+                  </div>
                 </div>
               )
             })}
@@ -62,6 +66,64 @@ export default function FichaTecnica() {
         )
       })}
       {editing && <RecipeForm product={editing} onClose={() => setEditing(null)} />}
+      {readyMade && <ReadyMadeForm product={readyMade} onClose={() => setReadyMade(null)} />}
+    </div>
+  )
+}
+
+/** Item que a barraca compra pronto: o material tem o nome do item e a ficha é 1 unidade dele. */
+function ReadyMadeForm({ product, onClose }: { product: Product; onClose: () => void }) {
+  const db = useDB()
+  const same = db.materials.find((m) => !m.deletedAt && m.name.trim().toLowerCase() === product.name.trim().toLowerCase())
+  const [cost, setCost] = useState(same?.cost ? centsToInput(same.cost) : '')
+  const cents = cost.trim() ? parseBRL(cost) : null
+  return (
+    <Modal title={`${product.name} · comprado pronto`} onClose={onClose}>
+      <label className="field">Quanto você paga por um {product.name}? (R$, opcional)
+        <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="3,50" autoFocus />
+      </label>
+      {cents !== null && cents > 0 && product.price > 0 && (
+        <p className="small">Vende por <b>{brl(product.price)}</b> · lucro de <b>{brl(product.price - cents)}</b> por unidade
+          ({Math.round(((product.price - cents) / product.price) * 100)}%)</p>
+      )}
+      <p className="muted small">
+        {same ? <>Vai usar o material <b>{same.name}</b> que já existe.</> : <>O app cria o material <b>{product.name}</b> (por unidade).</>}
+        {' '}Cada {product.name} vendido gasta 1 unidade, e a lista de compras mostra quantos comprar.
+      </p>
+      <button className="btn-primary btn-lg" onClick={() => attempt(() => saveReadyMade(product.id, cents), 'Ficha técnica salva').then((ok) => ok && onClose())}>Salvar</button>
+    </Modal>
+  )
+}
+
+const UNITS: { value: MaterialUnit; label: string }[] = [
+  { value: 'kg', label: 'Quilo' },
+  { value: 'l', label: 'Litro' },
+  { value: 'un', label: 'Unidade' },
+]
+const PER: Record<MaterialUnit, string> = { kg: 'kg', l: 'litro', un: 'unidade' }
+
+/** Cadastra um material sem sair da ficha técnica. */
+function NewMaterial({ onCreated, onCancel }: { onCreated: (m: Material) => void; onCancel: () => void }) {
+  const [name, setName] = useState('')
+  const [unit, setUnit] = useState<MaterialUnit>('kg')
+  const [cost, setCost] = useState('')
+  async function save() {
+    const input = { name, unit, cost: parseBRL(cost) }
+    const id = await saveMaterial(input)
+    onCreated({ ...input, name: name.trim(), id, deletedAt: null })
+  }
+  return (
+    <div className="card stack" style={{ background: 'var(--surface-2)' }}>
+      <strong>Novo material</strong>
+      <label className="field">Nome<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Alcatra" autoFocus /></label>
+      <Segmented full value={unit} onChange={setUnit} options={UNITS} />
+      <label className="field">Custo por {PER[unit]} (R$, opcional)
+        <input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="48,00" />
+      </label>
+      <div className="row">
+        <button className="btn-ghost grow" onClick={onCancel}>Cancelar</button>
+        <button className="btn-ok grow" onClick={() => void attempt(save, 'Material cadastrado')}>Cadastrar</button>
+      </div>
     </div>
   )
 }
@@ -70,7 +132,13 @@ interface Line { materialId: string; qty: string }
 
 function RecipeForm({ product, onClose }: { product: Product; onClose: () => void }) {
   const db = useDB()
-  const materials = useMemo(() => db.materials.filter((m) => !m.deletedAt).sort((a, b) => a.name.localeCompare(b.name)), [db.materials])
+  // os criados aqui entram na hora, antes de a nuvem mandar a lista nova
+  const [created, setCreated] = useState<Material[]>([])
+  const [adding, setAdding] = useState(false)
+  const materials = useMemo(() => {
+    const list = db.materials.filter((m) => !m.deletedAt)
+    return [...list, ...created.filter((c) => !list.some((m) => m.id === c.id))].sort((a, b) => a.name.localeCompare(b.name))
+  }, [db.materials, created])
   const [lines, setLines] = useState<Line[]>(() =>
     db.recipes.filter((r) => r.productId === product.id).map((r) => {
       const m = db.materials.find((x) => x.id === r.materialId)!
@@ -101,7 +169,21 @@ function RecipeForm({ product, onClose }: { product: Product; onClose: () => voi
           </div>
         )
       })}
-      <button onClick={() => setLines((ls) => [...ls, { materialId: '', qty: '' }])}>+ Material</button>
+      {adding ? (
+        <NewMaterial
+          onCancel={() => setAdding(false)}
+          onCreated={(m) => {
+            setCreated((c) => [...c, m])
+            setLines((ls) => [...ls.filter((l) => l.materialId), { materialId: m.id, qty: '' }])
+            setAdding(false)
+          }}
+        />
+      ) : (
+        <div className="row">
+          <button className="grow" onClick={() => setLines((ls) => [...ls, { materialId: '', qty: '' }])}>+ Material</button>
+          <button className="grow" onClick={() => setAdding(true)}>+ Cadastrar material novo</button>
+        </div>
+      )}
       <div className="row between">
         <span>Custo de um {product.name}</span>
         <span className="money"><b>{brl(cost)}</b>{product.price ? <span className="muted small"> · margem {Math.round(((product.price - cost) / product.price) * 100)}%</span> : null}</span>
