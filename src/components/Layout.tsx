@@ -29,6 +29,10 @@ export function Header({ title, right }: { title: string; right?: ReactNode }) {
       </div>
       {right}
       {user && (
+        // volta para a tela principal sem sair do PIN (para trocar de função)
+        <Link to="/" className="btn btn-ghost btn-sm header-home" aria-label="Início">🏠<span> Início</span></Link>
+      )}
+      {user && (
         <button className="btn-ghost btn-sm" onClick={() => { void logout(); nav('/') }}>Sair</button>
       )}
     </header>

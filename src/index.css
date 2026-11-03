@@ -278,3 +278,12 @@ table.list tr.group-row td { background: var(--bg); }
   .ready-alert-box { animation: chega 0.35s ease-out; }
   @keyframes chega { from { transform: scale(0.85); opacity: 0; } }
 }
+/* botão Início no topo: no celular pequeno, só o ícone */
+.app-header .header-home { white-space: nowrap; }
+@media (max-width: 340px) { .app-header .header-home span { display: none; } }
+@media (max-width: 420px) {
+  .app-header { gap: 6px; padding: 8px 10px; }
+  .app-header .logo { width: 30px; height: 30px; }
+  .app-header .btn-sm { padding: 6px 7px; font-size: 0.85rem; }
+}
+@media (max-width: 420px) { .app-header .header-label { display: none; } }
