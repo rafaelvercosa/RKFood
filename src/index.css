@@ -23,6 +23,9 @@
   --danger-bg: #fde4e1;
   --info: #2b5c8a;        /* lona azul */
   --info-bg: #dde8f3;
+  --solid: #23211f;       /* fundo de item selecionado (abas, mesas, etiquetas) */
+  --on-solid: #ffffff;
+  --header-bg: #23211f;   /* placa do topo e da tela inicial: escura nos dois temas */
   --radius: 8px;
   --font-sign: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
   --font-text: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -31,6 +34,54 @@
   color: var(--ink);
   background: var(--bg);
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Tema escuro: "Sistema" segue o aparelho; "Claro" e "Escuro" forçam (data-theme no <html>). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+  --bg: #161513;
+  --surface: #22201d;
+  --surface-2: #2e2b27;
+  --ink: #f1eee8;
+  --muted: #aaa59c;
+  --line: #3b3732;
+  --corn: #f2b705;
+  --corn-ink: #3d2e00;
+  --ok: #3f9a63;
+  --ok-bg: #1d3a29;
+  --warn: #e0a23a;
+  --warn-bg: #3a2d12;
+  --danger: #e5533f;
+  --danger-bg: #43201b;
+  --info: #6ea6db;
+  --info-bg: #1c2e40;
+  --solid: #f1eee8;
+  --on-solid: #161513;
+  --header-bg: #0c0b0a;
+  color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #161513;
+  --surface: #22201d;
+  --surface-2: #2e2b27;
+  --ink: #f1eee8;
+  --muted: #aaa59c;
+  --line: #3b3732;
+  --corn: #f2b705;
+  --corn-ink: #3d2e00;
+  --ok: #3f9a63;
+  --ok-bg: #1d3a29;
+  --warn: #e0a23a;
+  --warn-bg: #3a2d12;
+  --danger: #e5533f;
+  --danger-bg: #43201b;
+  --info: #6ea6db;
+  --info-bg: #1c2e40;
+  --solid: #f1eee8;
+  --on-solid: #161513;
+  --header-bg: #0c0b0a;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -51,7 +102,7 @@ strong.money, b.money, .money b, .money strong { font-family: var(--font-sign); 
 .app-header {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 16px; background: var(--ink); color: #fff;
+  padding: 10px 16px; background: var(--header-bg); color: #fff;
   border-bottom: 5px solid var(--brand);
 }
 .app-header .logo { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; background: var(--brand); flex: none; }
@@ -121,12 +172,12 @@ label.check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
 .segmented { display: inline-flex; border: 1.5px solid var(--ink); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
 .segmented button { border: 0; border-radius: 0; min-height: 42px; font-weight: 700; }
 .segmented button + button { border-left: 1.5px solid var(--ink); }
-.segmented button.on { background: var(--ink); color: #fff; }
+.segmented button.on { background: var(--solid); color: var(--on-solid); }
 .segmented.full { display: flex; } .segmented.full button { flex: 1; }
 
 .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
 .tabs button, .tabs a { white-space: nowrap; border-radius: 999px; min-height: 38px; padding: 6px 14px; }
-.tabs .on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.tabs .on { background: var(--solid); border-color: var(--solid); color: var(--on-solid); }
 
 .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 700; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
 .badge.novo { background: var(--corn); color: var(--corn-ink); }
@@ -146,7 +197,7 @@ label.check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
 /* ------------------------------------------------ tela inicial */
 .home-hero {
   min-height: 46vh; display: grid; place-items: end start; padding: 24px 16px;
-  background: var(--ink) center/cover no-repeat; color: #fff; position: relative;
+  background: var(--header-bg) center/cover no-repeat; color: #fff; position: relative;
   border-bottom: 8px solid var(--brand);
 }
 .home-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgb(0 0 0 / 0.7), rgb(0 0 0 / 0.05)); }
@@ -205,7 +256,7 @@ table.list td.right, table.list th.right { text-align: right; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgb(26 25 23 / 0.55); display: grid; place-items: end center; }
 .modal { background: var(--surface); width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; border-radius: 14px 14px 0 0; padding: 16px; display: grid; gap: 14px; border-top: 5px solid var(--brand); }
 @media (min-width: 640px) { .modal-backdrop { place-items: center; } .modal { border-radius: 10px; } }
-.toast { position: fixed; z-index: 60; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 12px 18px; border-radius: var(--radius); border-left: 6px solid var(--corn); max-width: calc(100% - 32px); font-weight: 700; }
+.toast { position: fixed; z-index: 60; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--header-bg); color: #fff; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.15); padding: 12px 18px; border-radius: var(--radius); border-left: 6px solid var(--corn); max-width: calc(100% - 32px); font-weight: 700; }
 .toast.error { border-left-color: var(--danger); }
 
 .two-col { display: grid; gap: 16px; }
@@ -223,12 +274,12 @@ table.list td.right, table.list th.right { text-align: right; }
 .table-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); max-height: 260px; overflow-y: auto; }
 fieldset:disabled .btn[aria-disabled='true'] { opacity: 0.5; pointer-events: none; }
 .table-grid button { min-height: 52px; padding: 0; font-family: var(--font-sign); font-weight: 800; font-size: 1.7rem; }
-.table-grid button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.table-grid button.on { background: var(--solid); border-color: var(--solid); color: var(--on-solid); }
 /* comer aqui ou para viagem: viagem em destaque, porque muda a embalagem */
 .badge.mode.local { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
-.badge.mode.viagem { background: var(--ink); color: #fff; }
+.badge.mode.viagem { background: var(--solid); color: var(--on-solid); }
 /* cronômetro da comanda, ordem na fila e alerta de atrasados */
-.queue-pos { font-family: var(--font-sign); font-weight: 800; font-size: 1.3rem; line-height: 1; padding: 2px 8px; border-radius: 4px; background: var(--ink); color: #fff; }
+.queue-pos { font-family: var(--font-sign); font-weight: 800; font-size: 1.3rem; line-height: 1; padding: 2px 8px; border-radius: 4px; background: var(--solid); color: var(--on-solid); }
 .timer { margin-top: 10px; padding: 8px 10px; border-radius: var(--radius); background: var(--ok-bg); color: var(--ok); }
 .timer.quase { background: var(--warn-bg); color: var(--warn); }
 .timer.atrasado { background: var(--danger); color: #fff; }

@@ -2,7 +2,9 @@ import { Link } from 'react-router-dom'
 import { useDB } from '../data/store'
 import { logoutOperator as logout } from '../data/api'
 import { hasRole, useCurrentUser } from '../data/session'
+import { Segmented } from '../components/ui'
 import { setClickSound, useClickSound } from '../lib/clickSound'
+import { setTheme, useTheme } from '../lib/theme'
 import type { Role } from '../types'
 
 const AREAS: { role: Role; to: string; ico: string; label: string; desc: string }[] = [
@@ -18,6 +20,7 @@ export default function Home() {
   const est = useDB().establishment
   const user = useCurrentUser()
   const clickSound = useClickSound()
+  const theme = useTheme()
   return (
     <>
       <section className="home-hero" style={est.coverUrl ? { backgroundImage: `url(${est.coverUrl})` } : undefined}>
@@ -50,6 +53,14 @@ export default function Home() {
             </div>
           </>
         )}
+        <div className="stack" style={{ justifyItems: 'center', gap: 6 }}>
+          <span className="small muted">Tema neste aparelho</span>
+          <Segmented value={theme} onChange={setTheme} options={[
+            { value: 'claro', label: '☀️ Claro' },
+            { value: 'escuro', label: '🌙 Escuro' },
+            { value: 'sistema', label: '📱 Sistema' },
+          ]} />
+        </div>
         <label className="check" style={{ justifySelf: 'center' }}>
           <input type="checkbox" checked={clickSound} onChange={(e) => setClickSound(e.target.checked)} />
           Som dos botões neste aparelho

@@ -7,7 +7,9 @@ import '@fontsource/atkinson-hyperlegible/700'
 import '@fontsource/big-shoulders-display/800'
 import './index.css'
 import { installClickSound } from './lib/clickSound'
+import { applyTheme } from './lib/theme'
 
+applyTheme()
 installClickSound()
 
 createRoot(document.getElementById('root')!).render(
