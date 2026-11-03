@@ -235,8 +235,14 @@ label.check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
 .ticket li b { display: inline-block; min-width: 38px; font-family: var(--font-sign); font-weight: 800; font-size: 1.35rem; }
 .ticket .obs { background: var(--warn-bg); color: var(--warn); padding: 4px 8px; border-radius: 4px; font-size: 0.95rem; font-weight: 700; }
 .tv { background: #1a1917; color: #f3f3f1; min-height: 100vh; }
-.tv .card { background: #f7f6f2; border-color: #f7f6f2; color: var(--ink); }
-.tv .card .muted { color: var(--muted); }
+/* modo TV: fundo escuro e cartões de papel claro nos dois temas. Dentro do cartão valem as
+   cores do tema claro, para o texto não sumir quando o aparelho está no tema escuro. */
+.tv .card {
+  --surface: #f7f6f2; --surface-2: #e4e7e4; --ink: #23211f; --muted: #5f6360; --line: #d3d8d4;
+  --ok: #2f7d4f; --ok-bg: #dcefe2; --warn: #9a5b00; --warn-bg: #fdf0c4; --danger: #b42318; --danger-bg: #fde4e1;
+  --info: #2b5c8a; --info-bg: #dde8f3; --solid: #23211f; --on-solid: #ffffff; --lip: #b9bfba;
+  background: var(--surface); border-color: var(--surface); color: var(--ink);
+}
 .tv > .muted, .tv .page > .muted { color: #b5b8b5; }
 .tv .ticket li { font-size: 1.5rem; }
 .tv .ticket .num { font-size: 3.2rem; }
@@ -265,9 +271,15 @@ table.list td.right, table.list th.right { text-align: right; }
 @media (min-width: 900px) { .two-col { grid-template-columns: 1.6fr 1fr; align-items: start; } .sticky-col { position: sticky; top: 72px; } }
 .tv .segmented { background: transparent; border-color: #f3f3f1; }
 .tv .segmented button { background: transparent; color: #f3f3f1; }
-.tv .segmented button.on { background: #f3f3f1; color: var(--ink); }
+.tv .segmented button.on { background: #f3f3f1; color: #1a1917; }
 .tv .segmented button + button { border-left-color: #f3f3f1; }
 .tv input, .tv select { background: #2a2826; color: #f3f3f1; border-color: #45423f; }
+/* dentro do cartão claro, seletor e campos voltam ao normal */
+.tv .card .segmented { background: var(--surface); border-color: var(--ink); }
+.tv .card .segmented button { background: var(--surface); color: var(--ink); }
+.tv .card .segmented button.on { background: var(--solid); color: var(--on-solid); }
+.tv .card .segmented button + button { border-left-color: var(--ink); }
+.tv .card input, .tv .card select { background: var(--surface); color: var(--ink); border-color: var(--line); }
 .tv .page > .row button:not(.btn-primary):not(.btn-ok):not(.btn-ghost) { background: #2a2826; color: #f3f3f1; border-color: #45423f; }
 
 .keypad-key { font-family: var(--font-sign); font-weight: 800; font-size: 1.9rem; }
