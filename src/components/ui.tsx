@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { identLabel } from '../data/selectors'
 import type { Order } from '../types'
 
@@ -62,14 +62,52 @@ export function ToastHost() {
 
 // ---------------------------------------------------------------- Modal
 
+// Janelas abertas ao mesmo tempo (uma pode abrir outra): a tela de trás só destrava quando fecha a última.
+let openModals = 0
+let savedScrollY = 0
+
+/** Trava a rolagem da tela de trás (no iPhone, overflow: hidden não basta: é preciso fixar o body). */
+function lockPageScroll(): () => void {
+  if (openModals++ === 0) {
+    savedScrollY = window.scrollY
+    Object.assign(document.body.style, { position: 'fixed', top: `-${savedScrollY}px`, left: '0', right: '0' })
+  }
+  return () => {
+    if (--openModals === 0) {
+      Object.assign(document.body.style, { position: '', top: '', left: '', right: '' })
+      window.scrollTo(0, savedScrollY)
+    }
+  }
+}
+
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  const backdrop = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+  useEffect(() => {
+    const unlock = lockPageScroll()
+    // com o teclado aberto, a janela fica na parte visível da tela (acima do teclado),
+    // para o botão Salvar não mudar de lugar e pegar já no primeiro toque
+    const vv = window.visualViewport
+    const fit = () => {
+      if (!vv || !backdrop.current) return
+      backdrop.current.style.top = `${vv.offsetTop}px`
+      backdrop.current.style.height = `${vv.height}px`
+    }
+    fit()
+    vv?.addEventListener('resize', fit)
+    vv?.addEventListener('scroll', fit)
+    return () => {
+      vv?.removeEventListener('resize', fit)
+      vv?.removeEventListener('scroll', fit)
+      unlock()
+    }
+  }, [])
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div ref={backdrop} className="modal-backdrop" onClick={onClose}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="row between">
           <h2>{title}</h2>
