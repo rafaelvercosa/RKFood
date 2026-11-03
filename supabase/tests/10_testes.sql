@@ -278,6 +278,13 @@ begin
   assert exists (select 1 from public.audit_log where summary like '%Cortesia R$ 10,00 (cortesia autorizada por Dono A)'), 'histórico da cortesia';
   raise notice 'OK cancelamento com PIN de gerente e cortesia com PIN do dono, tudo no histórico';
 
+  -- a cozinha também pede o cancelamento (o PIN do gerente é quem autoriza)
+  perform public.save_staff((select v::uuid from ctx where k = 'ta'), null, 'Coz', '', '4545', array['cozinha']);
+  o := public.create_order(tana, 'mesa', '9', 'local', '', jsonb_build_array(jsonb_build_object('product_id', carne, 'qty', 1)));
+  msg := public.cancel_order((select token from public.operator_login((select v::uuid from ctx where k = 'ea'), '4545')), o.id, 'pedido errado', '5555');
+  assert msg is null, msg;
+  assert exists (select 1 from public.audit_log where summary like '%cancelado por Coz, autorizado por Gerente G: pedido errado'), 'cozinha cancela com PIN do gerente';
+
   o := public.create_order(tana, 'mesa', '8', 'local', '', jsonb_build_array(jsonb_build_object('product_id', carne, 'qty', 1)));
   begin
     perform public.set_order_priority(tcx, o.id, true, 'pressa');

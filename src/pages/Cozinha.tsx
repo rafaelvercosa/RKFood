@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Header } from '../components/Layout'
 import { PriorityButton } from '../components/Priority'
-import { attempt, OrderIdent, Segmented, useNow } from '../components/ui'
-import { setOrderStatus } from '../data/api'
+import { attempt, AuthPinField, Modal, OrderIdent, Segmented, useNow } from '../components/ui'
+import { cancelOrder, setOrderStatus } from '../data/api'
 import { compareKitchenQueue, identLabel, isKitchenLate, KITCHEN_STATUSES, kitchenReadyAt, kitchenSeconds, kitchenSentAt, modeLabel, needsKitchen } from '../data/selectors'
 import { useDB } from '../data/store'
 import { beep } from '../lib/beep'
@@ -35,6 +35,7 @@ export default function Cozinha() {
   const [prefs, setPrefsState] = useState<KitchenPrefs>(loadPrefs)
   const [showSettings, setShowSettings] = useState(false)
   const [filter, setFilter] = useState<'fila' | 'prontos'>('fila')
+  const [cancelling, setCancelling] = useState<Order | null>(null)
   const setPrefs = (p: Partial<KitchenPrefs>) => {
     const next = { ...prefs, ...p }
     setPrefsState(next)
@@ -128,6 +129,7 @@ export default function Cozinha() {
                       <button className="grow" onClick={() => attempt(() => setOrderStatus(o.id, 'preparo'))}>↺ Voltar para preparo</button>
                     )}
                     <button className="icon-btn" title="Imprimir comanda" aria-label="Imprimir comanda" onClick={() => printTicket(o, db.establishment, prefs.paperMm)}>🖨️</button>
+                    <button className="icon-btn" title="Cancelar pedido" aria-label="Cancelar pedido" onClick={() => setCancelling(o)}>✕</button>
                   </div>
                 </article>
               )
@@ -135,7 +137,34 @@ export default function Cozinha() {
           </div>
         )}
       </main>
+      {cancelling && <CancelModal order={cancelling} onClose={() => setCancelling(null)} />}
     </div>
+  )
+}
+
+/** Cancelar pela cozinha: motivo e PIN de um gerente, digitado na hora (fica no histórico). */
+function CancelModal({ order, onClose }: { order: Order; onClose: () => void }) {
+  const [reason, setReason] = useState('')
+  const [pin, setPin] = useState('')
+  const motivos = ['Pedido feito errado', 'Cliente desistiu', 'Pedido repetido', 'Acabou o item']
+  return (
+    <Modal title={`Cancelar ${identLabel(order)} · pedido nº ${order.number}`} onClose={onClose}>
+      <p className="muted">O pedido sai da cozinha e do caixa e fica no histórico como cancelado. Pedido já pago não pode ser cancelado.</p>
+      <div className="tabs" style={{ flexWrap: 'wrap' }}>
+        {motivos.map((m) => <button key={m} className={reason === m ? 'on' : ''} onClick={() => setReason(m)}>{m}</button>)}
+      </div>
+      <label className="field">Motivo<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Pedido feito errado" /></label>
+      <AuthPinField label="PIN de um gerente para autorizar" value={pin} onChange={setPin} />
+      <div className="row">
+        <button className="grow" onClick={onClose}>Voltar</button>
+        <button
+          className="btn-danger grow"
+          onClick={() => attempt(() => cancelOrder(order.id, reason, pin), 'Pedido cancelado').then((ok) => (ok ? onClose() : setPin('')))}
+        >
+          Cancelar pedido
+        </button>
+      </div>
+    </Modal>
   )
 }
 
