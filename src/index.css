@@ -263,8 +263,10 @@ table.list td.right, table.list th.right { text-align: right; }
 .neg { color: var(--danger); } .pos { color: var(--ok); }
 
 /* ------------------------------------------------ modal e aviso */
-.modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgb(26 25 23 / 0.55); display: grid; place-items: end center; }
-.modal { background: var(--surface); width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; border-radius: 14px 14px 0 0; padding: 16px; display: grid; gap: 14px; border-top: 5px solid var(--brand); }
+/* a altura e o topo do fundo seguem a parte visível da tela (ver Modal em ui.tsx) */
+.modal-backdrop { position: fixed; top: 0; left: 0; right: 0; height: 100dvh; z-index: 50; background: rgb(26 25 23 / 0.55); display: grid; place-items: end center; overscroll-behavior: contain; }
+/* a rolagem fica só dentro da janela; chegar ao fim dela não rola a tela de trás */
+.modal { background: var(--surface); width: 100%; max-width: 560px; max-height: 92%; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; border-radius: 14px 14px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); display: grid; gap: 14px; border-top: 5px solid var(--brand); }
 @media (min-width: 640px) { .modal-backdrop { place-items: center; } .modal { border-radius: 10px; } }
 .toast { position: fixed; z-index: 60; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--header-bg); color: #fff; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.15); padding: 12px 18px; border-radius: var(--radius); border-left: 6px solid var(--corn); max-width: calc(100% - 32px); font-weight: 700; }
 .toast.error { border-left-color: var(--danger); }
