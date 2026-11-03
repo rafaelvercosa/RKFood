@@ -14,7 +14,7 @@ const { getDB, resetDemo } = await import('./store')
 const actions = await import('./actions')
 const sel = await import('./selectors')
 const { today } = await import('../lib/dates')
-const { parseBRL } = await import('../lib/money')
+const { brl, parseBRL } = await import('../lib/money')
 
 function setup() {
   resetDemo()
@@ -336,6 +336,35 @@ describe('área do dono: vendas, ficha técnica e compras', () => {
     expect(getDB().audit[0].summary).toContain('0,005 kg de Sal grosso')
     expect(() => actions.setMaterialTrashed(owner.id, sal.id, true)).toThrow('ficha técnica de: Carne')
     expect(() => actions.saveRecipe(owner.id, carne.id, [{ materialId: sal.id, qty: 0 }])).toThrow('Quantidade inválida')
+  })
+
+  it('comprado pronto: material com o nome do item e ficha de 1 un, num passo só', () => {
+    const { owner, carne } = setup()
+    const ger = getDB().users.find((u) => u.name === 'Gerente')!
+    actions.saveProduct(owner.id, { categoryId: carne.categoryId, name: 'Limoneto', description: '', price: 800, photoUrl: null, active: true, sendToKitchen: false })
+    const refri = getDB().products.find((p) => p.name === 'Limoneto')!
+    expect(() => actions.saveReadyMade(ger.id, refri.id, 350)).toThrow('perfil')
+    actions.saveReadyMade(owner.id, refri.id, 350)
+    const m = getDB().materials.find((x) => x.name === 'Limoneto')!
+    expect(m).toMatchObject({ unit: 'un', cost: 350 })
+    expect(getDB().recipes.filter((r) => r.productId === refri.id)).toEqual([{ productId: refri.id, materialId: m.id, qty: 1 }])
+    expect(getDB().audit[0].summary).toBe(`Limoneto marcado como comprado pronto: 1 un de Limoneto (custo ${brl(350)})`)
+    actions.saveReadyMade(owner.id, refri.id, null)
+    expect(getDB().materials.filter((x) => x.name === 'Limoneto')).toHaveLength(1)
+    expect(getDB().materials.find((x) => x.name === 'Limoneto')!.cost).toBe(350)
+  })
+
+  it('comprado pronto na categoria inteira: troca as fichas e deixa de fora o material em kg', () => {
+    const { owner, carne } = setup()
+    const ger = getDB().users.find((u) => u.name === 'Gerente')!
+    expect(() => actions.saveReadyMadeCategory(ger.id, carne.categoryId)).toThrow('perfil')
+    // no exemplo, "Queijo coalho" é item e também material comprado por kg
+    expect(actions.saveReadyMadeCategory(owner.id, carne.categoryId)).toEqual(['Queijo coalho'])
+    const db = getDB()
+    const m = db.materials.find((x) => x.name === 'Carne')!
+    expect(m.unit).toBe('un')
+    expect(db.recipes.filter((r) => r.productId === carne.id)).toEqual([{ productId: carne.id, materialId: m.id, qty: 1 }])
+    expect(db.audit[0].summary).toMatch(/^Categoria Espetinhos marcada como comprada pronta: Carne, .* \(ficaram de fora: Queijo coalho\)$/)
   })
 })
 

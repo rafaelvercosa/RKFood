@@ -448,6 +448,60 @@ export function setMaterialTrashed(userId: string, id: string, trashed: boolean)
   })
 }
 
+/** Troca a ficha do item por "1 un" do material com o mesmo nome (cria ou reaproveita). */
+function applyReadyMade(d: Database, product: Product, cost: number | null): Material {
+  const name = product.name.trim()
+  let m = d.materials.find((x) => !x.deletedAt && x.name.trim().toLowerCase() === name.toLowerCase())
+  if (m && m.unit !== 'un') throw new Error(`Já existe o material ${m.name} comprado por ${m.unit}. Use "Montar ficha".`)
+  if (!m) {
+    m = { id: newId(), name, unit: 'un', cost: cost ?? 0, deletedAt: null }
+    d.materials.push(m)
+  } else if (cost !== null) {
+    m.cost = cost
+  }
+  d.recipes = [...d.recipes.filter((r) => r.productId !== product.id), { productId: product.id, materialId: m.id, qty: 1 }]
+  return m
+}
+
+/**
+ * Item comprado pronto (refrigerante, limoneto, espeto já montado): a ficha vira "1 un" do
+ * material com o nome do item. cost null mantém o custo de um material que já existe.
+ */
+export function saveReadyMade(userId: string, productId: string, cost: number | null): void {
+  if (cost !== null && (!Number.isInteger(cost) || cost < 0)) throw new Error('Custo inválido')
+  commit(userId, 'ficha.editar', (d) => {
+    requireOwner(d, userId)
+    const product = d.products.find((p) => p.id === productId && !p.deletedAt)
+    if (!product) throw new Error('Item do cardápio não encontrado')
+    const m = applyReadyMade(d, product, cost)
+    return `${product.name} marcado como comprado pronto: 1 un de ${m.name} (custo ${m.cost > 0 ? brl(m.cost) : 'não informado'})`
+  })
+}
+
+/** A categoria inteira como comprada pronta. Devolve os itens que ficaram de fora (material em kg ou litro). */
+export function saveReadyMadeCategory(userId: string, categoryId: string): string[] {
+  const skipped: string[] = []
+  commit(userId, 'ficha.editar', (d) => {
+    requireOwner(d, userId)
+    const cat = d.categories.find((c) => c.id === categoryId && !c.deletedAt)
+    if (!cat) throw new Error('Categoria não encontrada')
+    const products = d.products.filter((p) => p.categoryId === cat.id && !p.deletedAt).sort((a, b) => a.name.localeCompare(b.name))
+    if (products.length === 0) throw new Error('Essa categoria não tem itens')
+    const done: string[] = []
+    for (const p of products) {
+      try {
+        applyReadyMade(d, p, null)
+        done.push(p.name)
+      } catch {
+        skipped.push(p.name)
+      }
+    }
+    return `Categoria ${cat.name} marcada como comprada pronta: ${done.length ? done.join(', ') : 'nenhum item'}` +
+      (skipped.length ? ` (ficaram de fora: ${skipped.join(', ')})` : '')
+  })
+  return skipped
+}
+
 /** Substitui a ficha técnica inteira de um item do cardápio. qty na unidade do material. */
 export function saveRecipe(userId: string, productId: string, items: { materialId: string; qty: number }[]): void {
   commit(userId, 'ficha.editar', (d) => {

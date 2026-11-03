@@ -496,6 +496,37 @@ begin
   assert (select count(*) from public.recipe_items where product_id = carne) = 1, 'ficha substituída';
   perform public.set_material_trashed(ta, palito, true);
   assert (select deleted_at is not null from public.materials where id = palito), 'palito na lixeira';
+  -- comprado pronto: cria o material com o nome do item e a ficha de 1 un, num passo só
+  begin
+    perform public.save_ready_made(tg, (select id from public.products where name = 'Refri'), 350);
+    raise exception 'gerente não deveria marcar comprado pronto';
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
+  perform public.save_ready_made(ta, (select id from public.products where name = 'Refri'), 350);
+  assert (select unit = 'un' and cost_cents = 350 from public.materials where name = 'Refri' and deleted_at is null), 'material criado';
+  assert (select r.qty = 1 from public.recipe_items r join public.products p on p.id = r.product_id where p.name = 'Refri'), 'ficha de 1 un';
+  assert exists (select 1 from public.audit_log where summary = 'Refri marcado como comprado pronto: 1 un de Refri (custo R$ 3,50)'), 'comprado pronto no histórico';
+  -- de novo: reaproveita o material e só atualiza o custo
+  perform public.save_ready_made(ta, (select id from public.products where name = 'Refri'), 400);
+  assert (select count(*) from public.materials where name = 'Refri') = 1, 'sem material repetido';
+  assert (select cost_cents from public.materials where name = 'Refri') = 400, 'custo atualizado';
+  -- material com o mesmo nome em kg: não mistura, pede para montar a ficha
+  perform public.save_material(ta, null, 'Carne', 'kg', 0);
+  begin
+    perform public.save_ready_made(ta, carne, 0);
+    raise exception 'material em kg não deveria virar comprado pronto';
+  exception when others then assert sqlerrm like 'Já existe o material Carne comprado por kg%', sqlerrm; end;
+  assert (select count(*) from public.recipe_items where product_id = carne) = 1, 'ficha da carne intacta';
+  -- a categoria inteira de uma vez: Frango vira comprado pronto, Carne (material em kg) fica de fora
+  perform public.save_product(ta, null, (select id from public.categories where name = 'Espetinhos'), 'Frango', '', 800, null, true, true);
+  begin
+    perform public.save_ready_made_category(tg, (select id from public.categories where name = 'Espetinhos'));
+    raise exception 'gerente não deveria marcar a categoria';
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
+  assert public.save_ready_made_category(ta, (select id from public.categories where name = 'Espetinhos')) = array['Carne'], 'Carne fica de fora';
+  assert (select r.qty = 1 and m.name = 'Frango' and m.unit = 'un' from public.recipe_items r join public.materials m on m.id = r.material_id
+          join public.products p on p.id = r.product_id where p.name = 'Frango'), 'Frango comprado pronto';
+  assert (select count(*) from public.recipe_items where product_id = carne) = 1, 'ficha da carne continua';
+  assert exists (select 1 from public.audit_log where summary = 'Categoria Espetinhos marcada como comprada pronta: Frango (ficaram de fora: Carne)'), 'categoria no histórico';
   raise notice 'OK materiais e ficha técnica: só o dono edita, tudo no histórico';
 end $$;
 
