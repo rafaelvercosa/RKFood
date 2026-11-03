@@ -41,7 +41,7 @@ async function sendAccess(u: User, establishment: string) {
   try {
     const link = await createInvite(u.id)
     const text = `Olá, ${u.name}! Este é o seu acesso ao ${establishment} no RKFood.\n\n` +
-      `Abra no seu celular (vale uma vez só, por 24 horas):\n${link}\n\nDepois, entre com o seu PIN.`
+      `Abra no seu celular e crie o seu PIN (o link vale uma vez só, por 24 horas):\n${link}`
     const url = whatsappTo(u.phone, text)
     if (win) win.location.href = url
     else location.href = url
@@ -69,6 +69,7 @@ export default function Equipe() {
           <div key={u.id} className="list-item">
             <div className="grow">
               <strong>{u.name}</strong> {u.blockedAt && <span className="badge atrasado">Bloqueado</span>}
+              {u.pinPending && !u.blockedAt && <span className="badge">Falta criar o PIN pelo link</span>}
               <div className="muted small">{u.roles.map((r) => ROLE_LABEL[r]).join(', ')}</div>
               <div className="muted small">
                 {u.phone ? `📱 ${formatPhone(u.phone)}` : 'sem telefone'}
@@ -86,7 +87,8 @@ export default function Equipe() {
       </div>
       <p className="muted small">
         Cada pessoa entra com o próprio PIN. Assim o histórico mostra quem fez cada pedido, pagamento ou alteração.
-        Com o WhatsApp cadastrado, "Enviar acesso" manda um link que libera o celular da pessoa (só o PIN dela funciona nele).
+        Com o WhatsApp cadastrado, "Enviar acesso" manda um link que libera o celular da pessoa e pede para ela criar o próprio PIN
+        (só o PIN dela funciona nele). O link também serve para trocar um PIN esquecido.
         {!isOwner && ' O gerente cria perfis de atendente; alterar, bloquear ou excluir é só com o dono.'}
       </p>
       {editing && <UserForm user={editing === 'novo' ? null : editing} isOwner={isOwner} onClose={() => setEditing(null)} />}
@@ -107,10 +109,14 @@ function UserForm({ user, isOwner, onClose }: { user: User | null; isOwner: bool
       <label className="field">WhatsApp (com DDD)
         <input inputMode="tel" placeholder="81 99999-0000" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
       </label>
-      <label className="field">PIN (4 a 6 números){user && isCloud ? '' : ' *'}
-        <input inputMode="numeric" maxLength={6} value={form.pin} placeholder={user && isCloud ? 'Deixe em branco para manter o PIN atual' : ''}
+      <label className="field">PIN (4 a 6 números){isCloud ? '' : ' *'}
+        <input inputMode="numeric" maxLength={6} value={form.pin}
+          placeholder={!isCloud ? '' : user ? 'Deixe em branco para manter o PIN atual' : 'Deixe em branco para a pessoa criar pelo link'}
           onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })} />
       </label>
+      {isCloud && !user && !form.pin && (
+        <p className="muted small">Sem PIN, a pessoa cria o dela ao abrir o link do WhatsApp (precisa do WhatsApp acima). Depois de salvar, toque em "📲 Enviar acesso".</p>
+      )}
       {isOwner ? (
         <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="small" style={{ fontWeight: 600, marginBottom: 6 }}>Perfis</legend>

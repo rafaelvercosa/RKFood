@@ -132,7 +132,8 @@ export async function signInDevice(email: string, password: string): Promise<voi
  * Celular que abriu o link de convite: entra com um login anônimo e o banco liga
  * o aparelho ao estabelecimento, só para a pessoa do convite.
  */
-export async function acceptInvite(code: string): Promise<void> {
+/** O PIN é o que a pessoa escolheu na página do link (só ela fica sabendo). */
+export async function acceptInvite(code: string, pin: string): Promise<void> {
   const auth = sb().auth
   const { data } = await auth.getSession()
   if (data.session) {
@@ -145,7 +146,7 @@ export async function acceptInvite(code: string): Promise<void> {
       ? 'O acesso por link ainda não está ligado neste estabelecimento. Avise o dono.'
       : friendly(error.message))
   }
-  const res = await withTimeout(sb().rpc('redeem_invite', { p_code: code, p_info: deviceInfo(), p_device_key: deviceKey() }))
+  const res = await withTimeout(sb().rpc('redeem_invite', { p_code: code, p_pin: pin, p_info: deviceInfo(), p_device_key: deviceKey() }))
   if (res.error) {
     await auth.signOut()
     throw new Error(friendly(res.error.message))
@@ -267,7 +268,7 @@ async function reload(eid: string): Promise<void> {
 
   const [est, staff, categories, products, customers, settlements, fiadoPays, audit, materials, recipes, devices] = await Promise.all([
     db.from('establishments').select('*').eq('id', eid).single(),
-    all<Row>((a, b) => db.from('staff').select('id, name, roles, deleted_at, phone, created_by, blocked_at').eq(E, eid).range(a, b)),
+    all<Row>((a, b) => db.from('staff').select('id, name, roles, deleted_at, phone, created_by, blocked_at, has_pin').eq(E, eid).range(a, b)),
     all<Row>((a, b) => db.from('categories').select('*').eq(E, eid).order('sort').range(a, b)),
     all<Row>((a, b) => db.from('products').select('*').eq(E, eid).order('name').range(a, b)),
     all<Row>((a, b) => db.from('customers').select('*').eq(E, eid).order('name').range(a, b)),
@@ -330,6 +331,7 @@ function toDatabase(r: {
   }
   const users: User[] = r.staff.map((s) => ({
     id: s.id, name: s.name, pin: '', roles: s.roles, deletedAt: s.deleted_at, phone: s.phone ?? '', createdBy: s.created_by, blockedAt: s.blocked_at,
+    pinPending: s.has_pin === false,
   }))
   const categories: Category[] = r.categories.map((c) => ({ id: c.id, name: c.name, sort: c.sort, deletedAt: c.deleted_at }))
   const products: Product[] = r.products.map((p) => ({

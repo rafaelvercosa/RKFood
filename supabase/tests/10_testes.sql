@@ -331,6 +331,15 @@ begin
   select id into nova from public.staff where name = 'Bia';
   assert (select phone = '81988887777' and created_by = ger from public.staff where id = nova), 'telefone e criado por';
   assert exists (select 1 from public.audit_log where summary = 'Usuário Bia (atendente) criado por Gerente G'), 'quem criou no histórico';
+  -- sem PIN: a pessoa cria pelo link do WhatsApp (por isso o telefone é obrigatório)
+  perform public.save_staff(tg, null, 'Duda', '81 97777-6666', null, array['atendente']);
+  assert (select not has_pin from public.staff where name = 'Duda'), 'Duda ainda sem PIN';
+  assert exists (select 1 from public.audit_log where summary = 'Usuário Duda (atendente) criado por Gerente G, sem PIN (a pessoa cria pelo link)'), 'sem PIN no histórico';
+  assert (select has_pin from public.staff where id = nova), 'Bia com PIN';
+  begin
+    perform public.save_staff(tg, null, 'Edu', '', null, array['atendente']);
+    raise exception 'sem PIN e sem telefone deveria falhar';
+  exception when others then assert sqlerrm like 'Informe o PIN ou o WhatsApp%', sqlerrm; end;
   begin
     perform public.save_staff(tg, null, 'Caio', '', '7878', array['caixa']);
     raise exception 'gerente não deveria criar caixa';
@@ -389,14 +398,25 @@ declare
   r record;
 begin
   assert (select count(*) from public.establishments) = 0, 'sem convite não vê nada';
-  assert public.redeem_invite((select v from ctx where k = 'convite'), 'Chrome no Android', 'chave-celular-bia') = ea, 'convite aceito';
+  begin
+    perform public.redeem_invite((select v from ctx where k = 'convite'), '12', 'Chrome no Android', 'chave-celular-bia');
+    raise exception 'PIN curto deveria falhar';
+  exception when others then assert sqlerrm = 'O PIN deve ter de 4 a 6 números', sqlerrm; end;
+  begin
+    perform public.redeem_invite((select v from ctx where k = 'convite'), '3333', 'Chrome no Android', 'chave-celular-bia');
+    raise exception 'PIN de outra pessoa deveria falhar';
+  exception when others then assert sqlerrm = 'Esse PIN já está em uso. Escolha outro.', sqlerrm; end;
+  -- a Bia escolhe o próprio PIN no link (o 7777 do cadastro deixa de valer)
+  assert public.redeem_invite((select v from ctx where k = 'convite'), '7272', 'Chrome no Android', 'chave-celular-bia') = ea, 'convite aceito';
   assert (select name from public.my_context()) = 'Espetinho A', 'celular ligado ao estabelecimento';
   select * into r from public.operator_login(ea, '1234', 'chave-celular-bia', 'Chrome no Android');
   assert r.token is null and r.name = 'Este celular é só de Bia.', coalesce(r.name, 'dono entrou no celular da Bia');
-  select * into r from public.operator_login(ea, '7777', 'chave-celular-bia', 'Chrome no Android');
-  assert r.token is not null and r.name = 'Bia', 'Bia entra no celular dela';
+  assert (select count(*) from public.operator_login(ea, '7777', 'chave-celular-bia', 'Chrome no Android')) = 0, 'PIN antigo da Bia não vale mais';
+  select * into r from public.operator_login(ea, '7272', 'chave-celular-bia', 'Chrome no Android');
+  assert r.token is not null and r.name = 'Bia', 'Bia entra no celular dela com o PIN que escolheu';
+  assert exists (select 1 from public.audit_log where summary = 'Bia criou o próprio PIN pelo link'), 'PIN criado no histórico';
   begin
-    perform public.redeem_invite((select v from ctx where k = 'convite'), 'x', 'outra');
+    perform public.redeem_invite((select v from ctx where k = 'convite'), '8888', 'x', 'outra');
     raise exception 'link não deveria valer duas vezes';
   exception when others then assert sqlerrm like 'Esse link já foi usado%', sqlerrm; end;
 end $$;

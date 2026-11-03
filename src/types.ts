@@ -46,6 +46,8 @@ export interface User {
   createdBy: string | null
   /** Bloqueado pelo dono: não entra com o PIN nem autoriza nada. */
   blockedAt: string | null
+  /** Só na nuvem: perfil criado sem PIN, esperando a pessoa criar o dela pelo link. */
+  pinPending?: boolean
 }
 
 export interface Category {
