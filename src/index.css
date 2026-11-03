@@ -26,6 +26,7 @@
   --solid: #23211f;       /* fundo de item selecionado (abas, mesas, etiquetas) */
   --on-solid: #ffffff;
   --header-bg: #23211f;   /* placa do topo e da tela inicial: escura nos dois temas */
+  --lip: #b9bfba;         /* base da tecla (botão levantado) */
   --radius: 8px;
   --font-sign: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
   --font-text: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -58,6 +59,7 @@
   --solid: #f1eee8;
   --on-solid: #161513;
   --header-bg: #0c0b0a;
+  --lip: #0a0908;
   color-scheme: dark;
   }
 }
@@ -81,6 +83,7 @@
   --solid: #f1eee8;
   --on-solid: #161513;
   --header-bg: #0c0b0a;
+  --lip: #0a0908;
   color-scheme: dark;
 }
 
@@ -145,7 +148,6 @@ button, .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; font-weight: 700;
 }
 button:hover, .btn:hover { border-color: var(--muted); }
-button:active, .btn:active { transform: translateY(1px); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
 .btn-primary:hover { border-color: var(--ink); }
@@ -268,7 +270,6 @@ table.list td.right, table.list th.right { text-align: right; }
 .tv input, .tv select { background: #2a2826; color: #f3f3f1; border-color: #45423f; }
 .tv .page > .row button:not(.btn-primary):not(.btn-ok):not(.btn-ghost) { background: #2a2826; color: #f3f3f1; border-color: #45423f; }
 
-@media (prefers-reduced-motion: reduce) { button:active, .btn:active { transform: none; } }
 .keypad-key { font-family: var(--font-sign); font-weight: 800; font-size: 1.9rem; }
 /* atalhos das mesas no atendente (quantidade escolhida pelo gerente) */
 .table-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); max-height: 260px; overflow-y: auto; }
@@ -338,3 +339,41 @@ table.list tr.group-row td { background: var(--bg); }
   .app-header .btn-sm { padding: 6px 7px; font-size: 0.85rem; }
 }
 @media (max-width: 420px) { .app-header .header-label { display: none; } }
+
+/* ------------------------------------------------ botões como tecla
+   Em repouso o botão fica levantado sobre uma base sólida (sem sombra borrada);
+   ao apertar, afunda até a base, que some. Selecionado (aba, mesa) fica afundado.
+   Cartões e comandas continuam planos: levantado = dá para apertar. */
+button, .btn {
+  box-shadow: 0 3px 0 var(--lip);
+  transition: transform 70ms ease-out, box-shadow 70ms ease-out, background-color 120ms;
+}
+button:active:not(:disabled), .btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--lip); }
+.btn-lg { box-shadow: 0 4px 0 var(--lip); }
+.btn-lg:active:not(:disabled) { transform: translateY(4px); }
+
+/* principais: base mais alta, na cor do próprio botão */
+.btn-primary { box-shadow: 0 4px 0 color-mix(in srgb, var(--brand) 62%, #000); }
+.btn-ok { box-shadow: 0 4px 0 color-mix(in srgb, var(--ok) 62%, #000); }
+.btn-danger { box-shadow: 0 3px 0 color-mix(in srgb, var(--danger) 45%, var(--lip)); }
+.btn-primary.btn-lg { box-shadow: 0 5px 0 color-mix(in srgb, var(--brand) 62%, #000); }
+.btn-ok.btn-lg { box-shadow: 0 5px 0 color-mix(in srgb, var(--ok) 62%, #000); }
+.btn-primary.btn-lg:active:not(:disabled), .btn-ok.btn-lg:active:not(:disabled) { transform: translateY(5px); box-shadow: none; }
+
+/* sem base: botões fantasma, desativados e os que vivem dentro de um grupo */
+.btn-ghost, button:disabled, .segmented button, .app-header button, .app-header .btn { box-shadow: none; }
+button:disabled { transform: none; }
+
+/* selecionado fica "apertado" */
+.tabs button, .tabs a { box-shadow: 0 2px 0 var(--lip); }
+.tabs .on, .table-grid button.on { box-shadow: none; transform: translateY(2px); }
+.table-grid button.on { transform: translateY(3px); }
+
+/* no computador, passar o mouse levanta um pouco */
+@media (hover: hover) {
+  button:not(:disabled):not(.btn-ghost):not(.on):not(:active):hover, .btn:not(.btn-ghost):not(.on):not(:active):hover { transform: translateY(-1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  button, .btn { transition: none; }
+  button:not(:disabled):hover, .btn:hover { transform: none; }
+}
