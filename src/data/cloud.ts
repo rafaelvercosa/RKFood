@@ -141,7 +141,7 @@ export async function acceptInvite(code: string): Promise<void> {
   }
   const { error } = await withTimeout(auth.signInAnonymously())
   if (error) {
-    throw new Error(/anonymous/i.test(error.message)
+    throw new Error(/anonymous|signups not allowed/i.test(error.message)
       ? 'O acesso por link ainda não está ligado neste estabelecimento. Avise o dono.'
       : friendly(error.message))
   }
