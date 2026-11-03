@@ -98,8 +98,10 @@
 
 ## Próximos passos (nesta ordem)
 1. **Publicado na Vercel em 02/11/2026: https://rkfood.vercel.app** (projeto `rkfood`, conta Hobby do Rafael;
-   publica sozinho a cada envio para a `main`). Login anônimo do Supabase ligado (para o convite);
-   cadastro aberto continua desligado. Falta testar num celular de verdade: conectar, PIN, convite pelo
+   publica sozinho a cada envio para a `main`). Login anônimo do Supabase ligado (para o convite). **No Supabase, o login anônimo conta como
+   cadastro: "Allow new users to sign up" precisa ficar LIGADO** (com "Confirm email" ligado), senão o link
+   dá "Signups not allowed". Conta criada por fora não vê nada (RLS).
+   Falta testar num celular de verdade: conectar, PIN, convite pelo
    WhatsApp, instalar na tela inicial e o botão Compartilhar da lista de compras.
 2. Depois: o **modo contingência offline** e o servidor local na barraca (`docs/roadmap.md`), backups,
    painel do administrador da plataforma, saldo de estoque.
