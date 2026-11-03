@@ -1,6 +1,6 @@
 // Modo nuvem: antes de tudo, o aparelho precisa entrar com a conta do estabelecimento.
 import { useState, type ReactNode } from 'react'
-import { chooseEstablishment, signInDevice, signOutDevice, useCloud } from '../data/cloud'
+import { chooseEstablishment, setNewPassword, signInDevice, signOutDevice, useCloud } from '../data/cloud'
 
 function Shell({ children }: { children: ReactNode }) {
   return (
@@ -33,6 +33,8 @@ export default function ConectarAparelho() {
       </Shell>
     )
   }
+
+  if (cloud.phase === 'nova-senha') return <NovaSenha />
 
   if (cloud.phase === 'escolher') {
     return (
@@ -69,6 +71,41 @@ export default function ConectarAparelho() {
         <label className="field">Senha<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
         {error && <p className="error-text" role="alert">{error}</p>}
         <button className="btn-primary btn-lg" disabled={busy}>{busy ? 'Conectando…' : 'Conectar'}</button>
+      </form>
+    </Shell>
+  )
+}
+
+/** Chegou pelo link de "trocar senha" do e-mail: cria a senha nova da conta do estabelecimento. */
+function NovaSenha() {
+  const [password, setPassword] = useState('')
+  const [again, setAgain] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(ev: React.FormEvent) {
+    ev.preventDefault()
+    if (password !== again) return setError('As duas senhas não são iguais')
+    setBusy(true)
+    setError('')
+    try {
+      await setNewPassword(password)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Shell>
+      <form className="card stack" onSubmit={submit}>
+        <h2>Criar senha nova</h2>
+        <p className="muted small">Esta é a senha da conta do estabelecimento, usada para conectar os aparelhos. Use pelo menos 8 caracteres.</p>
+        <label className="field">Senha nova<input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
+        <label className="field">Repita a senha nova<input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required /></label>
+        {error && <p className="error-text" role="alert">{error}</p>}
+        <button className="btn-primary btn-lg" disabled={busy}>{busy ? 'Salvando…' : 'Salvar senha nova'}</button>
       </form>
     </Shell>
   )

@@ -17,7 +17,7 @@ import { clearOperator } from './session'
 import { DB_VERSION } from './seed'
 import { getDB, setSnapshot } from './store'
 
-export type CloudPhase = 'iniciando' | 'desconectado' | 'escolher' | 'carregando' | 'pronto' | 'erro'
+export type CloudPhase = 'iniciando' | 'desconectado' | 'escolher' | 'carregando' | 'pronto' | 'erro' | 'nova-senha'
 
 interface CloudState {
   phase: CloudPhase
@@ -26,6 +26,12 @@ interface CloudState {
 }
 
 const EST_KEY = 'rkfood:estabelecimento'
+
+// Link de "trocar senha" do e-mail do Supabase: chega com #...type=recovery (ou com o erro, se venceu).
+// Lido antes de o Supabase limpar o endereço.
+const urlHash = new URLSearchParams(location.hash.slice(1))
+const arrivedForRecovery = urlHash.get('type') === 'recovery'
+const linkError = urlHash.get('error_code')
 let state: CloudState = { phase: 'iniciando', establishments: [], error: null }
 const listeners = new Set<() => void>()
 let channel: RealtimeChannel | null = null
@@ -77,6 +83,7 @@ export function startCloud(): void {
   if (started) return
   started = true
   sb().auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') set({ phase: 'nova-senha' })
     if (event === 'SIGNED_OUT') {
       stopRealtime()
       clearOperator()
@@ -91,7 +98,26 @@ export function startCloud(): void {
 
 async function boot(): Promise<void> {
   const { data } = await sb().auth.getSession()
+  if (linkError) {
+    history.replaceState(null, '', '/')
+    return set({
+      phase: data.session ? 'pronto' : 'erro',
+      error: linkError === 'otp_expired'
+        ? 'Esse link de troca de senha venceu ou já foi usado. Peça um novo.'
+        : 'Esse link não funcionou. Peça um novo.',
+    })
+  }
   if (!data.session) return set({ phase: 'desconectado' })
+  if (arrivedForRecovery) return set({ phase: 'nova-senha' })
+  await afterSignIn()
+}
+
+/** Grava a senha nova da conta do estabelecimento (depois do link do e-mail) e segue para o app. */
+export async function setNewPassword(password: string): Promise<void> {
+  if (password.length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres')
+  const { error } = await withTimeout(sb().auth.updateUser({ password }))
+  if (error) throw new Error(friendly(error.message))
+  history.replaceState(null, '', '/')
   await afterSignIn()
 }
 
