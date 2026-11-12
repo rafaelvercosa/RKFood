@@ -3,12 +3,13 @@ import { Header } from '../components/Layout'
 import { PriorityButton } from '../components/Priority'
 import { attempt, AuthPinField, Modal, OrderIdent, Segmented, useNow } from '../components/ui'
 import { cancelOrder, setOrderStatus } from '../data/api'
-import { compareKitchenQueue, identLabel, isKitchenLate, KITCHEN_STATUSES, kitchenReadyAt, kitchenSeconds, kitchenSentAt, modeLabel, needsKitchen } from '../data/selectors'
+import { compareKitchenQueue, grillTotals, identLabel, isKitchenLate, KITCHEN_STATUSES, kitchenReadyAt, kitchenSeconds, kitchenSentAt, modeLabel, needsKitchen } from '../data/selectors'
 import { useDB } from '../data/store'
 import { beep } from '../lib/beep'
 import { hhmm } from '../lib/dates'
 import { escapeHtml, printHtml } from '../lib/print'
 import type { Establishment, Order } from '../types'
+import { STATUS_LABEL } from '../types'
 
 // Preferências deste aparelho (cada tablet/TV da cozinha pode ser diferente).
 interface KitchenPrefs {
@@ -54,6 +55,7 @@ export default function Cozinha() {
   useLateAlert(late, prefs)
 
   const shown = filter === 'fila' ? queue : ready
+  const grill = grillTotals(queue)
 
   return (
     <div className={prefs.tv ? 'tv' : ''}>
@@ -86,6 +88,13 @@ export default function Cozinha() {
 
         <Segmented value={filter} onChange={setFilter} options={[{ value: 'fila', label: `Fila (${queue.length})` }, { value: 'prontos', label: `Prontos (${ready.length})` }]} />
 
+        {filter === 'fila' && grill.length > 0 && (
+          <div className="line-total" aria-label="Na chapa">
+            <span className="label">Na chapa</span>
+            {grill.map((g) => <span key={g.name} className="chip">{g.name}<b>{g.qty}</b></span>)}
+          </div>
+        )}
+
         {shown.length === 0 ? (
           <div className="card empty">{filter === 'fila' ? 'Nenhum pedido na fila. 🔥' : 'Nenhum pedido aguardando entrega.'}</div>
         ) : (
@@ -97,18 +106,18 @@ export default function Cozinha() {
                   {o.priorityAt && (
                     <div className="priority-flag">⬆ Prioridade<span>{o.priorityReason}</span></div>
                   )}
-                  <div className="row between">
+                  <div className="row between" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
                     <OrderIdent order={o} />
-                    <span className="row" style={{ gap: 6 }}>
-                      {filter === 'fila' && <span className="queue-pos" title="Posição na fila">{idx + 1}º</span>}
-                      <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
-                    </span>
+                    <KitchenTimer order={o} targetMin={targetMin} now={now} />
                   </div>
-                  <div className="row between">
-                    <span className="muted small">chegou {hhmm(kitchenSentAt(o))}</span>
+                  <div className="row" style={{ marginTop: 6 }}>
+                    {filter === 'fila' && <span className="queue-pos" title="Posição na fila">{idx + 1}º</span>}
+                    <span className={`badge mode ${o.mode}`}>{modeLabel(o)}</span>
+                    <span className={`badge ${o.status}`}>{STATUS_LABEL[o.status]}</span>
+                    {isLate && <span className="badge atrasado">Atrasado +{Math.floor((kitchenSeconds(o, now) - targetMin * 60) / 60)} min</span>}
+                    <span className="muted small grow">chegou {hhmm(kitchenSentAt(o))}</span>
                     <PriorityButton order={o} />
                   </div>
-                  <KitchenTimer order={o} targetMin={targetMin} now={now} />
                   <ul>
                     {o.items.filter((i) => i.sendToKitchen).map((i) => (
                       <li key={i.id}>
@@ -168,30 +177,23 @@ function CancelModal({ order, onClose }: { order: Order; onClose: () => void }) 
   )
 }
 
-/** Cronômetro da comanda: tempo desde que chegou na cozinha, contra o tempo estimado. */
+/** Cronômetro em anel: minutos desde que chegou na cozinha contra o tempo estimado. */
 function KitchenTimer({ order, targetMin, now }: { order: Order; targetMin: number; now: number }) {
   const secs = kitchenSeconds(order, now)
   const target = targetMin * 60
-  if (order.status === 'pronto') {
-    return <div className={`timer ${secs > target ? 'atrasado' : 'ok'}`}><span className="timer-text">Pronto em {clock(secs)}</span></div>
-  }
-  const state = secs >= target ? 'atrasado' : secs >= target * 0.75 ? 'quase' : 'ok'
+  const ready = order.status === 'pronto'
+  const state = ready ? (secs > target ? 'atrasado' : 'ok') : secs >= target ? 'atrasado' : secs >= target * 0.75 ? 'quase' : 'ok'
+  const color = state === 'atrasado' ? 'var(--danger)' : state === 'quase' ? 'var(--warn)' : 'var(--ok)'
+  const frac = Math.min(1, secs / target)
   return (
-    <div className={`timer ${state}`}>
-      <div className="row between">
-        <span className="timer-clock" aria-label={`${Math.floor(secs / 60)} minutos na cozinha`}>{clock(secs)}</span>
-        <span className="timer-text">
-          {state === 'atrasado' ? `Atrasado +${Math.floor((secs - target) / 60)} min` : `de ${targetMin} min`}
-        </span>
-      </div>
-      <div className="timer-bar" aria-hidden><span style={{ width: `${Math.min(100, (secs / target) * 100)}%` }} /></div>
+    <div className="ring" role="timer" aria-label={`${Math.floor(secs / 60)} minutos na cozinha, estimado ${targetMin}`}>
+      <svg width="64" height="64" viewBox="0 0 72 72" aria-hidden>
+        <circle cx="36" cy="36" r="30" fill="none" stroke="color-mix(in srgb, var(--ink) 14%, transparent)" strokeWidth="7" />
+        <circle cx="36" cy="36" r="30" fill="none" stroke={color} strokeWidth="7" strokeLinecap="round" strokeDasharray="188.5" strokeDashoffset={188.5 * (1 - frac)} />
+      </svg>
+      <b style={{ color }}>{Math.floor(secs / 60)}<small>min</small></b>
     </div>
   )
-}
-
-/** 75 segundos -> "1:15"; 3725 -> "62:05". */
-function clock(secs: number): string {
-  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`
 }
 
 /** Toca um aviso quando um pedido passa do tempo estimado (uma vez por pedido). */

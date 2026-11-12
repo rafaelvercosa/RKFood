@@ -272,3 +272,35 @@ export function splitEvenly(total: number, people: number): number[] {
   const extra = total - base * n
   return Array.from({ length: n }, (_, i) => base + (i < extra ? 1 : 0))
 }
+
+// ---------------------------------------------------------------- Cozinha: "Na chapa"
+
+/** Soma, por item, o que está na fila da cozinha (pedidos novos e em preparo), do mais pedido para o menos. */
+export function grillTotals(orders: Order[]): { name: string; qty: number }[] {
+  const map = new Map<string, { name: string; qty: number }>()
+  for (const o of orders) {
+    if (o.status !== 'novo' && o.status !== 'preparo') continue
+    for (const i of o.items) {
+      if (!i.sendToKitchen) continue
+      const cur = map.get(i.productId) ?? { name: i.name, qty: 0 }
+      cur.qty += i.qty
+      map.set(i.productId, cur)
+    }
+  }
+  return [...map.values()].sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name))
+}
+
+// ---------------------------------------------------------------- Caixa
+
+/** Turno de caixa aberto agora (se houver). */
+export function openCashSession(db: Pick<Database, 'cashSessions'>) {
+  return db.cashSessions.find((s) => !s.closedAt)
+}
+
+/** Dinheiro esperado na gaveta: troco inicial + dinheiro recebido (pedidos e fiado) desde a abertura. */
+export function expectedCash(db: Database, s: { openedAt: string; openingCents: number }): number {
+  const live = new Set(db.orders.filter((o) => o.status !== 'cancelado').map((o) => o.id))
+  const sales = db.payments.filter((p) => p.method === 'dinheiro' && live.has(p.orderId) && p.createdAt >= s.openedAt).reduce((t, p) => t + p.amount, 0)
+  const fiado = db.settlements.filter((x) => x.method === 'dinheiro' && x.createdAt >= s.openedAt).reduce((t, x) => t + x.amount, 0)
+  return s.openingCents + sales + fiado
+}

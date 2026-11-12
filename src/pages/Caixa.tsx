@@ -1,33 +1,91 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { CustomerForm } from '../components/CustomerForm'
+import { useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Header } from '../components/Layout'
 import { attempt, AuthPinField, Modal, OrderIdent, Segmented } from '../components/ui'
-import { cancelOrder, payOrder, setOrderStatus, type PaymentInput } from '../data/api'
-import { customerBalance, identLabel, modeLabel, orderPaid, orderPayments, orderRemaining, orderTotal } from '../data/selectors'
+import { cancelOrder, payOrder, setOrderStatus } from '../data/api'
+import { identLabel, modeLabel, openCashSession, openTables, orderPaid, orderPayments, orderRemaining, orderTotal } from '../data/selectors'
+import { hasRole, useCurrentUser } from '../data/session'
 import { useDB } from '../data/store'
-import { businessDateBR, dateBR, hhmm, today } from '../lib/dates'
-import { brl, centsToInput, parseBRL } from '../lib/money'
+import { businessDateBR, dateBR, hhmm, relativeAge, today } from '../lib/dates'
+import { brl } from '../lib/money'
 import { escapeHtml, printHtml } from '../lib/print'
-import type { Database, Order, PaymentMethod } from '../types'
+import type { Database, Order } from '../types'
 import { METHOD_LABEL, STATUS_LABEL } from '../types'
 import { DailyReport } from './gerente/Relatorios'
+import { CloseCashSheet, OpenCashSheet } from './caixa/CashSheets'
+import { PaymentForm } from './caixa/PaymentForm'
+import { TableBill } from './caixa/TableBill'
 
 export default function Caixa() {
-  const [view, setView] = useState<'receber' | 'pagos' | 'fechamento'>('receber')
+  const db = useDB()
+  const user = useCurrentUser()
+  const [params, setParams] = useSearchParams()
+  const [view, setView] = useState<'receber' | 'mesas' | 'pagos' | 'fechamento'>(params.get('mesa') ? 'mesas' : 'receber')
+  const [bill, setBill] = useState<string | null>(params.get('mesa'))
+  const [opening, setOpening] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const session = openCashSession(db)
+  const tables = openTables(db)
+  const closeBill = () => { setBill(null); if (params.get('mesa')) setParams({}, { replace: true }) }
   return (
     <>
-      <Header title="Caixa" right={<Link to="/fiado" className="btn btn-ghost btn-sm">📒 Fiado</Link>} />
+      <Header title="Caixa" right={<Link to="/fiado" className="btn btn-ghost btn-sm">📒<span className="header-label"> Fiado</span></Link>} />
       <main className="page">
+        {session ? (
+          <div className="row between hint ok" style={{ flexWrap: 'nowrap' }}>
+            <span>Caixa aberto desde {hhmm(session.openedAt)} · troco {brl(session.openingCents)}</span>
+            {hasRole(user, 'caixa') && <button className="btn-sm" onClick={() => setClosing(true)}>Fechar</button>}
+          </div>
+        ) : (
+          <div className="card stack" style={{ background: 'var(--solid)', color: 'var(--on-solid)' }}>
+            <div className="sign" style={{ fontSize: '1.5rem' }}>🔒 Caixa fechado</div>
+            <p style={{ fontWeight: 700 }}>Abra o caixa com o troco da gaveta para conferir o dinheiro no fim do dia.</p>
+            <button className="btn-primary" onClick={() => setOpening(true)}>Abrir o caixa</button>
+          </div>
+        )}
         <Segmented full value={view} onChange={setView} options={[
           { value: 'receber', label: 'A receber' },
-          { value: 'pagos', label: 'Pagos hoje' },
+          { value: 'mesas', label: `Mesas${tables.length ? ` (${tables.length})` : ''}` },
+          { value: 'pagos', label: 'Pagos' },
           { value: 'fechamento', label: 'Fechamento' },
         ]} />
         {view === 'receber' && <OrderList paid={false} />}
+        {view === 'mesas' && <TablesList onOpen={setBill} />}
         {view === 'pagos' && <OrderList paid />}
-        {view === 'fechamento' && <DailyReport date={today()} />}
+        {view === 'fechamento' && (
+          <>
+            {session && hasRole(user, 'caixa') && <button className="btn-ok btn-lg btn-block" onClick={() => setClosing(true)}>Fechar o caixa</button>}
+            <DailyReport date={today()} />
+          </>
+        )}
       </main>
+      {bill && <TableBill table={bill} onClose={closeBill} />}
+      {opening && <OpenCashSheet onClose={() => setOpening(false)} />}
+      {closing && <CloseCashSheet onClose={() => setClosing(false)} />}
+    </>
+  )
+}
+
+/** Mesas com conta aberta: toque para juntar os pedidos, dividir e receber. */
+function TablesList({ onOpen }: { onOpen: (table: string) => void }) {
+  const db = useDB()
+  const tables = openTables(db)
+  return (
+    <>
+      {tables.length === 0 && <div className="card empty">Nenhuma mesa com conta aberta. 👍</div>}
+      <div className="stack">
+        {tables.map((t) => (
+          <button key={t.table} className="card" style={{ display: 'block', textAlign: 'left', fontWeight: 500 }} onClick={() => onOpen(t.table)}>
+            <div className="row between" style={{ flexWrap: 'nowrap' }}>
+              <div>
+                <div className="ident-name">Mesa {t.table}</div>
+                <div className="small muted" style={{ fontWeight: 700 }}>{t.orders.length} {t.orders.length === 1 ? 'pedido' : 'pedidos'} · {relativeAge(t.since)}</div>
+              </div>
+              <strong className="money" style={{ fontSize: '1.7rem' }}>{brl(t.remaining)}</strong>
+            </div>
+          </button>
+        ))}
+      </div>
     </>
   )
 }
@@ -69,8 +127,6 @@ function OrderList({ paid }: { paid: boolean }) {
   )
 }
 
-const METHODS: PaymentMethod[] = ['pix', 'dinheiro', 'debito', 'credito', 'fiado', 'cortesia']
-
 function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
   const db = useDB()
   const total = orderTotal(o)
@@ -106,7 +162,7 @@ function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }
         </tbody>
       </table>
 
-      {remaining > 0 && <PaymentForm order={o} remaining={remaining} onDone={onClose} />}
+      {remaining > 0 && <PaymentForm remaining={remaining} submit={(input, pin) => payOrder(o.id, input, pin)} onDone={onClose} />}
 
       <div className="row">
         <button className="btn-sm" onClick={() => printReceipt(db, o)}>🖨️ Comprovante</button>
@@ -131,93 +187,6 @@ function OrderModal({ order: o, onClose }: { order: Order; onClose: () => void }
         </div>
       )}
     </Modal>
-  )
-}
-
-interface Part { method: PaymentMethod; amount: string; cash: string; customerId: string }
-
-function PaymentForm({ order: o, remaining, onDone }: { order: Order; remaining: number; onDone: () => void }) {
-  const db = useDB()
-  const [parts, setParts] = useState<Part[]>([{ method: 'pix', amount: centsToInput(remaining), cash: '', customerId: '' }])
-  const [newCustomerFor, setNewCustomerFor] = useState<number | null>(null)
-  const [ownerPin, setOwnerPin] = useState('')
-  const customers = useMemo(() => db.customers.filter((c) => !c.deletedAt).sort((a, b) => a.name.localeCompare(b.name)), [db.customers])
-
-  const sum = parts.reduce((s, p) => s + parseBRL(p.amount), 0)
-  const diff = remaining - sum
-  const set = (i: number, patch: Partial<Part>) => setParts((ps) => ps.map((p, j) => (j === i ? { ...p, ...patch } : p)))
-
-  function confirm() {
-    const input: PaymentInput[] = parts.map((p) => ({
-      method: p.method,
-      amount: parseBRL(p.amount),
-      cashReceived: p.method === 'dinheiro' && p.cash ? parseBRL(p.cash) : null,
-      customerId: p.method === 'fiado' ? p.customerId || null : null,
-    }))
-    void attempt(() => payOrder(o.id, input, ownerPin), 'Pagamento registrado').then((ok) => (ok ? onDone() : setOwnerPin('')))
-  }
-
-  return (
-    <div className="stack">
-      {parts.map((p, i) => {
-        const amount = parseBRL(p.amount)
-        const change = p.method === 'dinheiro' && p.cash ? parseBRL(p.cash) - amount : 0
-        return (
-          <div key={i} className="card flat stack">
-            <div className="tabs">
-              {METHODS.map((m) => (
-                <button key={m} className={p.method === m ? 'on' : ''} onClick={() => set(i, { method: m })}>{METHOD_LABEL[m]}</button>
-              ))}
-            </div>
-            <div className="row">
-              <label className="field grow">Valor (R$)
-                <input inputMode="decimal" value={p.amount} onChange={(e) => set(i, { amount: e.target.value })} />
-              </label>
-              {p.method === 'dinheiro' && (
-                <label className="field grow">Cliente entregou (R$)
-                  <input inputMode="decimal" placeholder="Para calcular o troco" value={p.cash} onChange={(e) => set(i, { cash: e.target.value })} />
-                </label>
-              )}
-            </div>
-            {p.method === 'dinheiro' && p.cash && (
-              <div className={change < 0 ? 'error-text' : ''}><b>{change < 0 ? 'Falta: ' : 'Troco: '}</b><span className="money" style={{ fontSize: '1.3rem' }}>{brl(Math.abs(change))}</span></div>
-            )}
-            {p.method === 'fiado' && (
-              <div className="stack">
-                <div className="row">
-                  <select className="grow" style={{ width: 'auto' }} value={p.customerId} onChange={(e) => set(i, { customerId: e.target.value })} aria-label="Cliente do fiado">
-                    <option value="">Escolha o cliente…</option>
-                    {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                  <button onClick={() => setNewCustomerFor(i)}>+ Novo</button>
-                </div>
-                {p.customerId && (() => {
-                  const c = customers.find((x) => x.id === p.customerId)
-                  const bal = customerBalance(db, p.customerId)
-                  return <p className="small muted">Já deve: <b className="money">{brl(bal)}</b>{c?.creditLimit ? ` · limite ${brl(c.creditLimit)}` : ''}</p>
-                })()}
-              </div>
-            )}
-            {parts.length > 1 && <button className="btn-sm btn-ghost" onClick={() => setParts((ps) => ps.filter((_, j) => j !== i))}>Remover esta forma</button>}
-          </div>
-        )
-      })}
-      {diff > 0 && (
-        <button onClick={() => setParts((ps) => [...ps, { method: 'dinheiro', amount: centsToInput(diff), cash: '', customerId: '' }])}>
-          + Dividir: pagar os {brl(diff)} restantes de outra forma
-        </button>
-      )}
-      {diff < 0 && <p className="error-text">A soma passa do valor em {brl(-diff)}.</p>}
-      {parts.some((p) => p.method === 'cortesia') && (
-        <AuthPinField label="Cortesia: PIN do dono para autorizar" value={ownerPin} onChange={setOwnerPin} />
-      )}
-      <button className="btn-ok btn-lg" disabled={sum <= 0 || diff < 0} onClick={confirm}>
-        Confirmar {brl(sum)}{diff > 0 ? ` (fica faltando ${brl(diff)})` : ''}
-      </button>
-      {newCustomerFor !== null && (
-        <CustomerForm onClose={() => setNewCustomerFor(null)} onSaved={(c) => set(newCustomerFor, { customerId: c.id })} />
-      )}
-    </div>
   )
 }
 

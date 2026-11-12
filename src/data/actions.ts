@@ -13,7 +13,7 @@ import type {
 } from '../types'
 import { METHOD_LABEL, STATUS_LABEL } from '../types'
 import { commit, getDB } from './store'
-import { customerBalance, identLabel, needsKitchen, orderRemaining, orderTotal } from './selectors'
+import { customerBalance, expectedCash, identLabel, needsKitchen, orderRemaining, orderTotal } from './selectors'
 
 function findOrder(d: Database, id: string): Order {
   const o = d.orders.find((x) => x.id === id)
@@ -523,5 +523,50 @@ export function saveRecipe(userId: string, productId: string, items: { materialI
       ...items.map((it) => ({ productId, materialId: it.materialId, qty: Math.round(it.qty * 10000) / 10000 })),
     ]
     return `Ficha técnica de ${product.name}: ${parts.length ? parts.join(' + ') : 'sem materiais'}`
+  })
+}
+
+// ---------------------------------------------------------------- Caixa (abrir e fechar)
+
+
+export function openCash(userId: string, openingCents: number): void {
+  if (!Number.isInteger(openingCents) || openingCents < 0) throw new Error('Informe o troco da gaveta')
+  commit(userId, 'caixa.abrir', (d) => {
+    if (d.cashSessions.some((s) => !s.closedAt)) throw new Error('O caixa já está aberto')
+    d.cashSessions.unshift({
+      id: newId(), businessDate: today(), openedAt: nowIso(), openedBy: userId, openingCents,
+      closedAt: null, closedBy: null, expectedCents: null, countedCents: null, differenceCents: null, note: '',
+    })
+    return `Caixa aberto com troco de ${brl(openingCents)}`
+  })
+}
+
+/** Devolve a diferença (contado − esperado). */
+export function closeCash(userId: string, countedCents: number, note: string): number {
+  if (!Number.isInteger(countedCents) || countedCents < 0) throw new Error('Informe o dinheiro contado na gaveta')
+  let diff = 0
+  commit(userId, 'caixa.fechar', (d) => {
+    const s = d.cashSessions.find((x) => !x.closedAt)
+    if (!s) throw new Error('O caixa não está aberto')
+    const expected = expectedCash(d, s)
+    diff = countedCents - expected
+    Object.assign(s, { closedAt: nowIso(), closedBy: userId, expectedCents: expected, countedCents, differenceCents: diff, note: note.trim() })
+    return `Caixa fechado: esperado ${brl(expected)}, contado ${brl(countedCents)}, diferença ${diff < 0 ? '− ' : ''}${brl(Math.abs(diff))}${note.trim() ? ` (${note.trim()})` : ''}`
+  })
+  return diff
+}
+
+// ---------------------------------------------------------------- Observações rápidas
+
+export function saveQuickNotes(userId: string, notes: string[]): void {
+  const clean: string[] = []
+  for (const n of notes.map((x) => x.trim()).filter(Boolean)) {
+    if (!clean.some((c) => c.toLowerCase() === n.toLowerCase())) clean.push(n)
+  }
+  if (clean.length > 20) throw new Error('No máximo 20 observações rápidas')
+  if (clean.some((c) => c.length > 30 || c.includes(','))) throw new Error('Cada observação deve ter até 30 letras e não pode ter vírgula')
+  commit(userId, 'estabelecimento.editar', (d) => {
+    d.establishment.quickNotes = clean
+    return `Observações rápidas: ${clean.length ? clean.join(', ') : 'padrão'}`
   })
 }

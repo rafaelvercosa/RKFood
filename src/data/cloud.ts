@@ -11,7 +11,7 @@ import { useSyncExternalStore } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { today } from '../lib/dates'
 import { deviceInfo, deviceKey } from '../lib/device'
-import type { AuditEntry, Category, Customer, Database, Device, Establishment, FiadoSettlement, Material, Order, Payment, Product, RecipeItem, User } from '../types'
+import type { AuditEntry, CashSession, Category, Customer, Database, Device, Establishment, FiadoSettlement, Material, Order, Payment, Product, RecipeItem, User } from '../types'
 import { sb } from './backend'
 import { clearOperator } from './session'
 import { DB_VERSION } from './seed'
@@ -266,7 +266,7 @@ async function reload(eid: string): Promise<void> {
   const db = sb()
   const E = 'establishment_id'
 
-  const [est, staff, categories, products, customers, settlements, fiadoPays, audit, materials, recipes, devices] = await Promise.all([
+  const [est, staff, categories, products, customers, settlements, fiadoPays, audit, materials, recipes, devices, cashRows] = await Promise.all([
     db.from('establishments').select('*').eq('id', eid).single(),
     all<Row>((a, b) => db.from('staff').select('id, name, roles, deleted_at, phone, created_by, blocked_at, has_pin').eq(E, eid).range(a, b)),
     all<Row>((a, b) => db.from('categories').select('*').eq(E, eid).order('sort').range(a, b)),
@@ -278,6 +278,8 @@ async function reload(eid: string): Promise<void> {
     all<Row>((a, b) => db.from('materials').select('*').eq(E, eid).order('name').range(a, b)),
     all<Row>((a, b) => db.from('recipe_items').select('*').eq(E, eid).range(a, b)),
     all<Row>((a, b) => db.from('devices').select('*').eq(E, eid).order('last_seen_at', { ascending: false }).range(a, b)),
+    // caixa (migração 14): se o banco ainda não tem a tabela, segue sem ela
+    db.from('cash_sessions').select('*').eq(E, eid).order('opened_at', { ascending: false }).limit(120).then((r) => (r.error ? [] : ((r.data ?? []) as Row[]))),
   ])
   if (est.error) throw new Error(est.error.message)
   if (audit.error) throw new Error(audit.error.message)
@@ -302,7 +304,7 @@ async function reload(eid: string): Promise<void> {
 
   setSnapshot(toDatabase({
     est: est.data as Row, staff, categories, products, customers, settlements, orders, audit: (audit.data ?? []) as Row[],
-    materials, recipes, devices,
+    materials, recipes, devices, cash: cashRows,
   }))
 }
 
@@ -322,7 +324,7 @@ export async function fetchOrdersBetween(from: string, to: string): Promise<{ or
 
 function toDatabase(r: {
   est: Row; staff: Row[]; categories: Row[]; products: Row[]; customers: Row[]; settlements: Row[]; orders: Row[]; audit: Row[]
-  materials: Row[]; recipes: Row[]; devices: Row[]
+  materials: Row[]; recipes: Row[]; devices: Row[]; cash: Row[]
 }): Database {
   const establishment: Establishment = {
     id: r.est.id, name: r.est.name, slogan: r.est.slogan, logoUrl: r.est.logo_url, coverUrl: r.est.cover_url,
@@ -354,7 +356,12 @@ function toDatabase(r: {
     id: d.id, kind: d.kind, staffId: d.staff_id, info: d.info, firstSeenAt: d.first_seen_at, lastSeenAt: d.last_seen_at,
     lastStaffId: d.last_staff_id, blockedAt: d.blocked_at,
   }))
-  return { version: DB_VERSION, establishment, users, categories, products, orders, payments, customers, settlements, audit, materials, recipes, devices }
+  const cashSessions: CashSession[] = r.cash.map((c) => ({
+    id: c.id, businessDate: c.business_date, openedAt: c.opened_at, openedBy: c.opened_by, openingCents: c.opening_cents,
+    closedAt: c.closed_at, closedBy: c.closed_by, expectedCents: c.expected_cents, countedCents: c.counted_cents,
+    differenceCents: c.difference_cents, note: c.note ?? '',
+  }))
+  return { version: DB_VERSION, establishment, users, categories, products, orders, payments, customers, settlements, audit, materials, recipes, devices, cashSessions }
 }
 
 function toOrders(rows: Row[]): { orders: Order[]; payments: Payment[] } {

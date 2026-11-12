@@ -546,6 +546,74 @@ begin
   raise notice 'OK entrada, saída e aparelho no histórico';
 end $$;
 
+-- Caixa: abrir com troco, receber em dinheiro, fechar contando a gaveta; observações rápidas
+do $$
+declare
+  ea uuid := (select v::uuid from ctx where k = 'ea');
+  -- sessões novas: as anteriores podem ter sido encerradas pelos testes de saída
+  ta uuid := (select token from public.operator_login(ea, '1234'));
+  tg uuid := (select token from public.operator_login(ea, '5555'));
+  tcx uuid := (select token from public.operator_login(ea, '3333'));
+  tana uuid := (select token from public.operator_login(ea, '1111'));
+  carne uuid := (select id from public.products where deleted_at is null order by name limit 1);
+  price int := (select price_cents from public.products where id = carne);
+  o public.orders;
+  diff int;
+begin
+  begin
+    perform public.open_cash(tana, 5000);
+    raise exception 'atendente não deveria abrir o caixa';
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
+  begin
+    perform public.close_cash(tcx, 0, '');
+    raise exception 'fechar sem abrir deveria falhar';
+  exception when others then assert sqlerrm = 'O caixa não está aberto', sqlerrm; end;
+  begin
+    perform public.open_cash(tcx, -1);
+    raise exception 'troco negativo deveria falhar';
+  exception when others then assert sqlerrm = 'Informe o troco da gaveta', sqlerrm; end;
+
+  perform public.open_cash(tcx, 10000);
+  begin
+    perform public.open_cash(tg, 500);
+    raise exception 'segundo caixa aberto deveria falhar';
+  exception when others then assert sqlerrm = 'O caixa já está aberto', sqlerrm; end;
+  assert (select count(*) from public.cash_sessions where closed_at is null) = 1, 'um caixa aberto';
+
+  o := public.create_order(tana, 'mesa', '12', 'local', '', jsonb_build_array(jsonb_build_object('product_id', carne, 'qty', 1)));
+  perform public.pay_order(tcx, o.id, jsonb_build_array(jsonb_build_object('method', 'dinheiro', 'amount_cents', price, 'cash_received_cents', price + 500)), null);
+
+  begin
+    perform public.close_cash(tcx, -5, '');
+    raise exception 'contagem negativa deveria falhar';
+  exception when others then assert sqlerrm = 'Informe o dinheiro contado na gaveta', sqlerrm; end;
+  -- esperado = troco + dinheiro recebido; faltando R$ 2,00 na contagem
+  diff := public.close_cash(tcx, 10000 + price - 200, 'Troco dado a mais');
+  assert diff = -200, 'diferença esperada de -200, veio ' || diff;
+  assert (select expected_cents = 10000 + price and counted_cents = 10000 + price - 200 and difference_cents = -200 and note = 'Troco dado a mais'
+          from public.cash_sessions where closed_at is not null), 'sessão fechada com esperado, contado e diferença';
+  assert exists (select 1 from public.audit_log where action = 'caixa.abrir' and summary like 'Caixa aberto com troco de R$ 100,00'), 'abertura no histórico';
+  assert exists (select 1 from public.audit_log where action = 'caixa.fechar' and summary like 'Caixa fechado:%diferença − R$ 2,00%Troco dado a mais%'), 'fechamento no histórico';
+  perform public.open_cash(tcx, 0); -- depois de fechar, abre de novo
+  assert (select count(*) from public.cash_sessions) = 2, 'duas sessões';
+
+  -- observações rápidas: só o gerente; limpa repetidas e vazias; limites
+  begin
+    perform public.save_quick_notes(tcx, array['Sem pimenta']);
+    raise exception 'caixa não deveria mudar as observações';
+  exception when others then assert sqlerrm = 'Seu perfil não permite esta ação.', sqlerrm; end;
+  perform public.save_quick_notes(tg, array['Sem pimenta', ' sem PIMENTA ', '', 'Bem passado']);
+  assert (select quick_notes from public.establishments) = array['Sem pimenta', 'Bem passado'], 'observações limpas';
+  begin
+    perform public.save_quick_notes(tg, array['a, b']);
+    raise exception 'vírgula deveria falhar';
+  exception when others then assert sqlerrm like 'Cada observação deve ter até 30 letras%', sqlerrm; end;
+  perform public.save_quick_notes(ta, '{}');
+  assert (select cardinality(quick_notes) from public.establishments) = 0, 'volta ao padrão';
+  assert (select count(*) from public.cash_sessions) = 2, 'dono vê as sessões';
+  raise notice 'OK caixa: abrir, receber em dinheiro, fechar com diferença; observações rápidas';
+end $$;
+
 -- ===================================================== como aparelho B
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000b');
 do $$
@@ -554,6 +622,7 @@ begin
   assert (select count(*) from public.orders) = 0, 'B não pode ver pedidos de A';
   assert (select count(*) from public.customers) = 0, 'B não pode ver clientes de A';
   assert (select count(*) from public.materials) = 0 and (select count(*) from public.recipe_items) = 0, 'B não vê materiais nem fichas de A';
+  assert (select count(*) from public.cash_sessions) = 0, 'B não vê o caixa de A';
   assert (select count(*) from public.audit_log) = 1, 'B só vê o próprio histórico';
   begin
     perform public.save_category(ta, null, 'Invasão');

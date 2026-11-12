@@ -214,6 +214,23 @@ export interface Device {
   blockedAt: string | null
 }
 
+/** Um turno de caixa: aberto com o troco da gaveta e fechado contando o dinheiro. */
+export interface CashSession {
+  id: string
+  businessDate: string
+  openedAt: string
+  openedBy: string
+  openingCents: number
+  closedAt: string | null
+  closedBy: string | null
+  /** Dinheiro que deveria haver na gaveta ao fechar (troco + dinheiro recebido). */
+  expectedCents: number | null
+  countedCents: number | null
+  /** Contado − esperado (negativo = faltou dinheiro). */
+  differenceCents: number | null
+  note: string
+}
+
 export interface Database {
   version: number
   establishment: Establishment
@@ -228,4 +245,5 @@ export interface Database {
   materials: Material[]
   recipes: RecipeItem[]
   devices: Device[]
+  cashSessions: CashSession[]
 }

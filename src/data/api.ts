@@ -10,6 +10,7 @@ import { isCloud, sb } from './backend'
 import { establishmentId, fetchOrdersBetween, friendly, scheduleReload, withTimeout } from './cloud'
 import { deviceInfo, deviceKey } from '../lib/device'
 import { clearOperator, currentUserId, operatorToken, setOperator } from './session'
+import { planTablePayments } from './tablePay'
 import { getDB } from './store'
 
 export type { CustomerInput, MaterialInput, NewOrderInput, PaymentInput, ProductInput, Trashable, UserInput } from './actions'
@@ -259,4 +260,34 @@ export async function loadPeriod(from: string, to: string): Promise<{ orders: Or
     return { orders, payments: db.payments.filter((p) => ids.has(p.orderId)) }
   }
   return withTimeout(fetchOrdersBetween(from, to), 30000)
+}
+
+// ---------------------------------------------------------------- caixa e observações rápidas
+
+/** Abre o caixa com o troco da gaveta (centavos). */
+export async function openCash(openingCents: number): Promise<void> {
+  if (!isCloud) return demo.openCash(uid(), openingCents)
+  await rpc('open_cash', { p_opening_cents: openingCents })
+}
+
+/** Fecha o caixa com o dinheiro contado; devolve a diferença em centavos (negativa = faltou). */
+export async function closeCash(countedCents: number, note: string): Promise<number> {
+  if (!isCloud) return demo.closeCash(uid(), countedCents, note)
+  return rpc<number>('close_cash', { p_counted_cents: countedCents, p_note: note })
+}
+
+/** Gerente ou dono. Lista vazia volta aos botões padrão. */
+export async function saveQuickNotes(notes: string[]): Promise<void> {
+  if (!isCloud) return demo.saveQuickNotes(uid(), notes)
+  await rpc('save_quick_notes', { p_notes: notes })
+}
+
+/**
+ * Conta da mesa: um pagamento que cobre vários pedidos da mesma mesa.
+ * Cada pedido recebe a sua parte (do mais antigo ao mais novo). Se der erro no meio, o que já foi
+ * pago continua pago e a tela mostra quanto ainda falta.
+ */
+export async function payTable(orders: Order[], payments: PaymentInput[], authPin = ''): Promise<void> {
+  const plan = planTablePayments(getDB(), orders, payments)
+  for (const step of plan) await payOrder(step.orderId, step.payments, authPin)
 }
