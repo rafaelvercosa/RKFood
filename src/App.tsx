@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { RequireRole, useBrandColor } from './components/Layout'
-import { ToastHost } from './components/ui'
+import { OfflineBar, ToastHost } from './components/ui'
 import { isCloud } from './data/backend'
 import { startCloud, useCloud } from './data/cloud'
 import AceitarConvite from './pages/AceitarConvite'
@@ -14,6 +14,7 @@ import Gerente from './pages/Gerente'
 import Dono from './pages/Dono'
 import Home from './pages/Home'
 import Login from './pages/Login'
+import Manual from './pages/Manual'
 
 if (isCloud) startCloud()
 
@@ -40,9 +41,12 @@ export default function App() {
   }
   return (
     <BrowserRouter>
+      <OfflineBar />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/entrar" element={<Login />} />
+        <Route path="/manual" element={<Manual />} />
+        <Route path="/manual/:id" element={<Manual />} />
         <Route path="/atendente" element={<RequireRole role="atendente"><Atendente /></RequireRole>} />
         <Route path="/cozinha" element={<RequireRole role="cozinha"><Cozinha /></RequireRole>} />
         <Route path="/caixa" element={<RequireRole role="caixa"><Caixa /></RequireRole>} />

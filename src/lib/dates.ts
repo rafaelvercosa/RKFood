@@ -31,3 +31,10 @@ export function businessDateBR(day: string): string {
 export function minutesSince(iso: string, now: number = Date.now()): number {
   return Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000))
 }
+
+/** "38 min" ou "2 h 05": há quanto tempo algo começou. */
+export function relativeAge(iso: string, now: number = Date.now()): string {
+  const min = Math.max(0, minutesSince(iso, now))
+  if (min < 60) return `${min} min`
+  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
+}

@@ -206,3 +206,69 @@ export function identLabel(o: Pick<Order, 'identType' | 'identValue'>): string {
 export function modeLabel(o: Pick<Order, 'mode'>): string {
   return o.mode === 'viagem' ? 'Para viagem' : 'Comer aqui'
 }
+
+// ---------------------------------------------------------------- Mesas abertas (conta da mesa)
+
+export interface OpenTable {
+  /** Número ou nome da mesa, como o atendente digitou. */
+  table: string
+  /** Pedidos da mesa que ainda têm valor a receber, do mais antigo para o mais novo. */
+  orders: Order[]
+  /** Soma dos pedidos (pagos ou não) que ainda têm saldo. */
+  total: number
+  /** Quanto falta receber. */
+  remaining: number
+  /** Quando o primeiro pedido foi feito. */
+  since: string
+}
+
+const tableKey = (v: string) => v.trim().toLowerCase()
+
+/** Mesas com conta aberta: pedidos de mesa não cancelados que ainda não foram pagos por inteiro. */
+export function openTables(db: Database): OpenTable[] {
+  const map = new Map<string, OpenTable>()
+  const orders = db.orders
+    .filter((o) => o.identType === 'mesa' && o.status !== 'cancelado' && orderRemaining(db, o) > 0)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  for (const o of orders) {
+    const k = tableKey(o.identValue)
+    const cur = map.get(k) ?? { table: o.identValue.trim(), orders: [], total: 0, remaining: 0, since: o.createdAt }
+    cur.orders.push(o)
+    cur.total += orderTotal(o)
+    cur.remaining += orderRemaining(db, o)
+    map.set(k, cur)
+  }
+  return [...map.values()].sort((a, b) => a.since.localeCompare(b.since))
+}
+
+/** Pedidos em aberto de uma mesa (mesma regra de openTables). */
+export function tableOrders(db: Database, table: string): OpenTable | undefined {
+  return openTables(db).find((t) => tableKey(t.table) === tableKey(table))
+}
+
+/**
+ * Reparte um valor pago entre os pedidos da mesa, do mais antigo para o mais novo.
+ * Dá erro se o valor passa do que falta receber.
+ */
+export function allocateToOrders(db: Database, orders: Order[], amount: number): { orderId: string; amount: number }[] {
+  let left = amount
+  const out: { orderId: string; amount: number }[] = []
+  for (const o of orders) {
+    if (left <= 0) break
+    const take = Math.min(left, orderRemaining(db, o))
+    if (take > 0) {
+      out.push({ orderId: o.id, amount: take })
+      left -= take
+    }
+  }
+  if (left > 0) throw new Error('O valor passa do que falta receber na mesa')
+  return out
+}
+
+/** Divide um valor em partes iguais em centavos; as sobras vão para as primeiras pessoas. */
+export function splitEvenly(total: number, people: number): number[] {
+  const n = Math.max(1, Math.floor(people))
+  const base = Math.floor(total / n)
+  const extra = total - base * n
+  return Array.from({ length: n }, (_, i) => base + (i < extra ? 1 : 0))
+}

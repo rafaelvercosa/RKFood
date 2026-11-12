@@ -32,6 +32,8 @@ export interface Establishment {
   kitchenTargetMin: number
   /** Quantos botões de mesa o atendente vê (0 = só o campo de texto). */
   tableCount: number
+  /** Botões de observação rápida ao revisar o pedido (ex.: “Sem pimenta”). Vazio = usa os padrões. */
+  quickNotes: string[]
 }
 
 export interface User {

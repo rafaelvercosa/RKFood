@@ -28,6 +28,7 @@ function load(): Database {
       if (parsed.version === DB_VERSION) {
         parsed.establishment.kitchenTargetMin ??= 15 // demonstração salva antes do tempo estimado
         parsed.establishment.tableCount ??= 10 // ... e antes da quantidade de mesas
+        parsed.establishment.quickNotes ??= [] // ... e antes das observações rápidas
         parsed.materials ??= [] // ... e antes da ficha técnica
         parsed.recipes ??= []
         parsed.devices ??= []

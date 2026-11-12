@@ -1,15 +1,24 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { isCloud } from '../data/backend'
 import { identLabel } from '../data/selectors'
 import type { Order } from '../types'
 
 // ---------------------------------------------------------------- Aviso rápido (toast)
 
-type ToastMsg = { text: string; error: boolean; id: number }
+type ToastMsg = { text: string; error: boolean; id: number; undo?: () => void; ms?: number }
 let pushToast: ((t: ToastMsg) => void) | null = null
 let seq = 0
 
+/** Quanto tempo o aviso de "Desfazer" fica na tela. */
+export const UNDO_MS = 8000
+
 export function toast(text: string): void {
   pushToast?.({ text, error: false, id: ++seq })
+}
+
+/** Aviso com botão "Desfazer" e contagem. A ação já valeu; desfazer a reverte dentro de 8 segundos. */
+export function toastUndo(text: string, undo: () => void): void {
+  pushToast?.({ text, error: false, id: ++seq, undo, ms: UNDO_MS })
 }
 
 export function toastError(e: unknown): void {
@@ -26,6 +35,10 @@ let busy = false
  */
 export async function attempt(fn: () => unknown, okText?: string): Promise<boolean> {
   if (busy) return false
+  if (isCloud && typeof navigator !== 'undefined' && navigator.onLine === false) {
+    toastError(new Error('Sem internet. Tente de novo quando a conexão voltar.'))
+    return false
+  }
   busy = true
   try {
     await fn()
@@ -39,8 +52,16 @@ export async function attempt(fn: () => unknown, okText?: string): Promise<boole
   }
 }
 
+/** Como `attempt`, mas o aviso de sucesso traz "Desfazer" (8 segundos). */
+export async function attemptUndo(fn: () => unknown, okText: string, undo: () => unknown): Promise<boolean> {
+  const ok = await attempt(fn)
+  if (ok) toastUndo(okText, () => { void attempt(undo, 'Desfeito') })
+  return ok
+}
+
 export function ToastHost() {
   const [msg, setMsg] = useState<ToastMsg | null>(null)
+  const [left, setLeft] = useState(0)
   useEffect(() => {
     pushToast = setMsg
     return () => {
@@ -49,13 +70,33 @@ export function ToastHost() {
   }, [])
   useEffect(() => {
     if (!msg) return
-    const t = setTimeout(() => setMsg(null), msg.error ? 4500 : 2500)
-    return () => clearTimeout(t)
+    const ms = msg.ms ?? (msg.error ? 4500 : 2500)
+    setLeft(Math.ceil(ms / 1000))
+    const tick = msg.undo ? setInterval(() => setLeft((n) => Math.max(0, n - 1)), 1000) : null
+    const t = setTimeout(() => setMsg(null), ms)
+    return () => {
+      clearTimeout(t)
+      if (tick) clearInterval(tick)
+    }
   }, [msg])
   if (!msg) return null
+  const secs = Math.ceil((msg.ms ?? 0) / 1000)
   return (
     <div className={`toast ${msg.error ? 'error' : ''}`} role="status" key={msg.id}>
-      {msg.text}
+      <span>{msg.text}</span>
+      {msg.undo && (
+        <>
+          <span className="count" aria-hidden>
+            <svg width="34" height="34" viewBox="0 0 34 34">
+              <circle cx="17" cy="17" r="14" fill="none" stroke="rgb(255 255 255 / 0.25)" strokeWidth="3" />
+              <circle cx="17" cy="17" r="14" fill="none" stroke="#ffc53d" strokeWidth="3" strokeLinecap="round" strokeDasharray="88"
+                style={{ animation: `undo-ring ${msg.ms}ms linear forwards` }} />
+            </svg>
+            <b>{left}</b>
+          </span>
+          <button className="undo" onClick={() => { const u = msg.undo; setMsg(null); u?.() }} aria-label={`Desfazer (${left || secs} segundos)`}>Desfazer</button>
+        </>
+      )}
     </div>
   )
 }
@@ -183,4 +224,29 @@ export function AuthPinField({ label, value, onChange }: { label: string; value:
       />
     </label>
   )
+}
+
+// ---------------------------------------------------------------- Sem internet
+
+/** true enquanto o aparelho está com internet. */
+export function useOnline(): boolean {
+  const [on, setOn] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine !== false))
+  useEffect(() => {
+    const up = () => setOn(true)
+    const down = () => setOn(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => {
+      window.removeEventListener('online', up)
+      window.removeEventListener('offline', down)
+    }
+  }, [])
+  return on
+}
+
+/** Faixa no alto da tela quando a internet cai (só no modo nuvem). Nada é guardado para depois. */
+export function OfflineBar() {
+  const online = useOnline()
+  if (!isCloud || online) return null
+  return <div className="offline-bar" role="status">Sem internet. Não faça pedidos agora.</div>
 }

@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { PriorityButton } from '../components/Priority'
 import { Header } from '../components/Layout'
-import { attempt, Modal, OrderIdent, Photo, Segmented, useNow } from '../components/ui'
+import { attempt, Modal, OrderIdent, Photo, Segmented, toastUndo, useNow } from '../components/ui'
 import { createOrder, setOrderStatus } from '../data/api'
-import { identLabel, isKitchenLate, isOrderPaid, modeLabel, orderTotal } from '../data/selectors'
+import { identLabel, isKitchenLate, isOrderPaid, modeLabel, openTables, orderTotal } from '../data/selectors'
+import { hasRole, useCurrentUser } from '../data/session'
 import { useDB } from '../data/store'
 import { alarm } from '../lib/beep'
 import { hhmm, minutesSince, today } from '../lib/dates'
+import { DEFAULT_QUICK_NOTES, splitNotes, toggleNote } from '../lib/quickNotes'
 import { brl } from '../lib/money'
+import { relativeAge } from '../lib/dates'
 import type { IdentType, Order, Product, ServiceMode } from '../types'
 import { STATUS_LABEL } from '../types'
 
@@ -18,27 +22,41 @@ interface CartLine {
   notes: string
 }
 
+type Tab = 'novo' | 'pedidos' | 'mesas'
+
+/** Mesa ou nome já escolhido (vindo de "Adicionar itens" numa mesa aberta). */
+interface Preset { identType: IdentType; identValue: string; mode: ServiceMode }
+
 export default function Atendente() {
-  const [view, setView] = useState<'novo' | 'pedidos'>('novo')
+  const [params, setParams] = useSearchParams()
+  const initial = params.get('aba')
+  const [view, setView] = useState<Tab>(initial === 'pedidos' || initial === 'mesas' ? initial : 'novo')
+  const [preset, setPreset] = useState<Preset | null>(null)
   const { readyCount, alert, dismiss } = useReadyWatcher()
+  const db = useDB()
+  const tables = openTables(db).length
+  const go = (v: Tab) => { setView(v); if (params.get('aba')) setParams({}, { replace: true }) }
   return (
     <>
       {alert.length > 0 && (
-        <ReadyAlert orders={alert} onClose={dismiss} onShow={() => { dismiss(); setView('pedidos') }} />
+        <ReadyAlert orders={alert} onClose={dismiss} onShow={() => { dismiss(); go('pedidos') }} />
       )}
       <Header title="Atendimento" />
       <div className="page" style={{ paddingBottom: 0 }}>
         <Segmented
           full
           value={view}
-          onChange={setView}
+          onChange={go}
           options={[
-            { value: 'novo', label: 'Novo pedido' },
-            { value: 'pedidos', label: `Pedidos do dia${readyCount ? ` (${readyCount} pronto${readyCount > 1 ? 's' : ''})` : ''}` },
+            { value: 'novo', label: 'Novo' },
+            { value: 'pedidos', label: `Pedidos${readyCount ? ` (${readyCount})` : ''}` },
+            { value: 'mesas', label: `Mesas${tables ? ` (${tables})` : ''}` },
           ]}
         />
       </div>
-      {view === 'novo' ? <NewOrder onSent={() => setView('pedidos')} /> : <OrdersToday />}
+      {view === 'novo' && <NewOrder preset={preset} onUsedPreset={() => setPreset(null)} onSent={() => go('pedidos')} />}
+      {view === 'pedidos' && <OrdersToday />}
+      {view === 'mesas' && <OpenTables onAdd={(p) => { setPreset(p); go('novo') }} />}
     </>
   )
 }
@@ -108,25 +126,36 @@ function ReadyAlert({ orders, onClose, onShow }: { orders: Order[]; onClose: () 
 }
 
 
-function NewOrder({ onSent }: { onSent: () => void }) {
+function NewOrder({ preset, onUsedPreset, onSent }: { preset: Preset | null; onUsedPreset: () => void; onSent: () => void }) {
   const db = useDB()
   const categories = useMemo(() => db.categories.filter((c) => !c.deletedAt).sort((a, b) => a.sort - b.sort), [db.categories])
   const products = db.products.filter((p) => !p.deletedAt && p.active)
+  const quick = db.establishment.quickNotes.length ? db.establishment.quickNotes : DEFAULT_QUICK_NOTES
+  const [step, setStep] = useState<1 | 2>(preset ? 2 : 1)
   const [catId, setCatId] = useState<string>('todos')
-  const [identType, setIdentType] = useState<IdentType>('mesa')
-  const [identValue, setIdentValue] = useState('')
-  const [mode, setMode] = useState<ServiceMode>('local')
+  const [q, setQ] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [identType, setIdentType] = useState<IdentType>(preset?.identType ?? 'mesa')
+  const [identValue, setIdentValue] = useState(preset?.identValue ?? '')
+  const [mode, setMode] = useState<ServiceMode>(preset?.mode ?? 'local')
+  const [other, setOther] = useState(false)
   const [notes, setNotes] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
   const [reviewing, setReviewing] = useState(false)
-  // botões das mesas 1..N (o gerente escolhe N); mesa fora disso continua pelo campo de texto
+  useEffect(() => { if (preset) onUsedPreset() }, [preset, onUsedPreset])
+  // botões das mesas (o gerente escolhe quantas); as primeiras 10 aparecem, as demais pelo "Outra"
   const tableCount = db.establishment.tableCount
-  const mesas = useMemo(() => Array.from({ length: tableCount }, (_, i) => String(i + 1)), [tableCount])
+  const mesas = useMemo(() => Array.from({ length: Math.min(tableCount, 10) }, (_, i) => String(i + 1)), [tableCount])
+  const showOther = other || tableCount === 0 || tableCount > 10 || (identValue !== '' && !mesas.includes(identValue))
 
-  const visible = products.filter((p) => catId === 'todos' || p.categoryId === catId)
+  const visible = products
+    .filter((p) => catId === 'todos' || p.categoryId === catId)
+    .filter((p) => !q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase()))
   const qtyOf = (id: string) => cart.filter((l) => l.product.id === id).reduce((s, l) => s + l.qty, 0)
   const total = cart.reduce((s, l) => s + l.qty * l.product.price, 0)
   const count = cart.reduce((s, l) => s + l.qty, 0)
+  const who = identType === 'mesa' ? `Mesa ${identValue}` : identValue
+  const ready = identValue.trim() !== ''
 
   function add(p: Product) {
     setCart((c) => {
@@ -135,8 +164,23 @@ function NewOrder({ onSent }: { onSent: () => void }) {
       return [...c, { key: crypto.randomUUID(), product: p, qty: 1, notes: '' }]
     })
   }
-  const update = (key: string, patch: Partial<CartLine>) =>
+  /** Tira um da quantidade do item (no cardápio). */
+  function remove(p: Product) {
+    setCart((c) => {
+      const i = [...c].reverse().findIndex((l) => l.product.id === p.id)
+      if (i < 0) return c
+      const idx = c.length - 1 - i
+      return c.map((l, j) => (j === idx ? { ...l, qty: l.qty - 1 } : l)).filter((l) => l.qty > 0)
+    })
+  }
+  const update = (key: string, patch: Partial<CartLine>) => {
+    const line = cart.find((l) => l.key === key)
     setCart((c) => c.map((l) => (l.key === key ? { ...l, ...patch } : l)).filter((l) => l.qty > 0))
+    // item tirado do pedido: dá 8 segundos para desfazer
+    if (line && patch.qty !== undefined && patch.qty <= 0) {
+      toastUndo(`${line.product.name} tirado do pedido`, () => setCart((c) => (c.some((l) => l.key === key) ? c : [...c, line])))
+    }
+  }
 
   async function send() {
     const ok = await attempt(() =>
@@ -148,97 +192,113 @@ function NewOrder({ onSent }: { onSent: () => void }) {
         })),
       }), db.establishment.paymentTiming === 'antes' ? 'Pedido registrado. Aguardando pagamento no caixa.' : 'Pedido enviado para a cozinha!')
     if (ok) {
-      setCart([]); setNotes(''); setIdentValue(''); setReviewing(false)
+      setCart([]); setNotes(''); setIdentValue(''); setReviewing(false); setStep(1); setOther(false)
       onSent()
     }
+  }
+
+  if (step === 1) {
+    return (
+      <main className="page">
+        <div className="card stack">
+          <div className="row between">
+            <h2>Para quem é o pedido?</h2>
+            <span className="steps-dots" aria-label="Passo 1 de 2"><i className="on" /><i /></span>
+          </div>
+          <Segmented full value={identType} onChange={(v) => { setIdentType(v); setIdentValue(''); setOther(false) }} options={[{ value: 'mesa', label: 'Mesa' }, { value: 'nome', label: 'Nome' }]} />
+          {identType === 'mesa' && mesas.length > 0 && (
+            <div className="table-circles" role="group" aria-label="Escolher mesa">
+              {mesas.map((n) => (
+                <button key={n} type="button" className={identValue === n ? 'on' : ''} aria-pressed={identValue === n} onClick={() => { setIdentValue(n); setOther(false) }}>{n}</button>
+              ))}
+              {tableCount <= 10 && tableCount > 0 && (
+                <button type="button" className={showOther ? 'on' : ''} aria-pressed={showOther} style={{ fontSize: '0.9rem' }} onClick={() => { setOther(true); setIdentValue('') }}>Outra</button>
+              )}
+            </div>
+          )}
+          {(identType === 'nome' || showOther) && (
+            <input
+              inputMode={identType === 'mesa' ? 'numeric' : 'text'}
+              placeholder={identType === 'mesa' ? 'Nº ou nome da mesa' : 'Nome do cliente'}
+              value={identValue}
+              onChange={(e) => setIdentValue(e.target.value)}
+              aria-label={identType === 'mesa' ? 'Número da mesa' : 'Nome do cliente'}
+              autoFocus
+            />
+          )}
+          <Segmented full value={mode} onChange={setMode} options={[{ value: 'local', label: '🍽️ Comer aqui' }, { value: 'viagem', label: '🛍️ Para viagem' }]} />
+          <button className="btn-primary btn-lg btn-block" disabled={!ready} onClick={() => setStep(2)}>Continuar</button>
+        </div>
+      </main>
+    )
   }
 
   return (
     <>
       <main className="page">
-        <div className="card stack">
-          <div className="row">
-            <Segmented value={identType} onChange={setIdentType} options={[{ value: 'mesa', label: 'Mesa' }, { value: 'nome', label: 'Nome' }]} />
-            <input
-              className="grow"
-              style={{ width: 'auto' }}
-              inputMode={identType === 'mesa' ? 'numeric' : 'text'}
-              placeholder={identType === 'mesa' ? 'Nº da mesa' : 'Nome do cliente'}
-              value={identValue}
-              onChange={(e) => setIdentValue(e.target.value)}
-              aria-label={identType === 'mesa' ? 'Número da mesa' : 'Nome do cliente'}
-            />
-          </div>
-          {identType === 'mesa' && mesas.length > 0 && (
-            <div className="table-grid" role="group" aria-label="Escolher mesa">
-              {mesas.map((n) => (
-                <button key={n} type="button" className={identValue === n ? 'on' : ''} aria-pressed={identValue === n} onClick={() => setIdentValue(n)}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          )}
-          <Segmented full value={mode} onChange={setMode} options={[{ value: 'local', label: '🍽️ Comer aqui' }, { value: 'viagem', label: '🛍️ Para viagem' }]} />
+        <div className="ident-pill">
+          <span className="circle" aria-hidden>{identType === 'mesa' ? identValue.slice(0, 3) : identValue.slice(0, 1).toUpperCase()}</span>
+          <span className="grow"><b>{who}</b> <span className="muted small">· {mode === 'local' ? 'Comer aqui' : 'Para viagem'}</span></span>
+          <button className="btn-sm" onClick={() => setStep(1)}>Alterar</button>
         </div>
 
         <nav className="tabs" aria-label="Categorias">
+          <button className="icon-btn" aria-label="Buscar item" aria-pressed={searching} onClick={() => { setSearching((v) => !v); setQ('') }}>🔍</button>
           <button className={catId === 'todos' ? 'on' : ''} onClick={() => setCatId('todos')}>Todos</button>
           {categories.map((c) => (
             <button key={c.id} className={catId === c.id ? 'on' : ''} onClick={() => setCatId(c.id)}>{c.name}</button>
           ))}
         </nav>
+        {searching && <input type="search" placeholder="Buscar item do cardápio" aria-label="Buscar item" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />}
 
         {visible.length === 0 ? (
-          <div className="card empty">Nenhum item no cardápio. Peça ao gerente para cadastrar.</div>
+          <div className="card empty">{products.length === 0 ? 'Nenhum item no cardápio. Peça ao gerente para cadastrar.' : 'Nenhum item encontrado.'}</div>
         ) : (
           <div className="menu-grid">
-            {visible.map((p) => (
-              <button key={p.id} className="menu-item card" onClick={() => add(p)}>
-                <Photo src={p.photoUrl} name={p.name} />
-                <div className="info">
-                  <strong>{p.name}</strong>
-                  <span className="money muted">{brl(p.price)}</span>
+            {visible.map((p) => {
+              const n = qtyOf(p.id)
+              return (
+                <div key={p.id} className={`menu-item card ${n > 0 ? 'in-cart' : ''}`}>
+                  <button type="button" className="menu-main" onClick={() => add(p)} aria-label={`Adicionar ${p.name}, ${brl(p.price)}`}>
+                    <Photo src={p.photoUrl} name={p.name} />
+                    <span className="info" style={{ display: "grid" }}>
+                      <strong>{p.name}</strong>
+                      <span className="money muted">{brl(p.price)}</span>
+                    </span>
+                  </button>
+                  {n === 0 ? (
+                    <span className="add" aria-hidden>+</span>
+                  ) : (
+                    <span className="stepper">
+                      <button type="button" aria-label={`Tirar um ${p.name}`} onClick={() => remove(p)}>−</button>
+                      <b>{n}</b>
+                      <button type="button" aria-label={`Mais um ${p.name}`} onClick={() => add(p)}>+</button>
+                    </span>
+                  )}
                 </div>
-                {qtyOf(p.id) > 0 && <span className="qty-badge">{qtyOf(p.id)}</span>}
-              </button>
-            ))}
+              )
+            })}
           </div>
         )}
       </main>
 
       {count > 0 && (
         <div className="cart-bar">
-          <div className="row" style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div className="cart-pill">
             <div className="grow">
-              <div className="small muted">{count} {count === 1 ? 'item' : 'itens'}</div>
+              <div className="small">{count} {count === 1 ? 'item' : 'itens'} · {who}</div>
               <strong className="money">{brl(total)}</strong>
             </div>
-            <button className="btn-primary btn-lg" onClick={() => setReviewing(true)}>Revisar e enviar</button>
+            <button className="btn-primary btn-lg" onClick={() => setReviewing(true)}>Revisar →</button>
           </div>
         </div>
       )}
 
       {reviewing && (
-        <Modal title={`Pedido — ${identValue ? (identType === 'mesa' ? `Mesa ${identValue}` : identValue) : 'sem identificação'}`} onClose={() => setReviewing(false)}>
+        <Modal title={`Revisar · ${who}`} onClose={() => setReviewing(false)}>
           <div>
             {cart.map((l) => (
-              <div key={l.key} className="cart-line">
-                <div>
-                  <strong>{l.product.name}</strong>
-                  <div className="muted small money">{brl(l.product.price)} cada</div>
-                </div>
-                <div className="qty">
-                  <button onClick={() => update(l.key, { qty: l.qty - 1 })} aria-label="Diminuir">−</button>
-                  <span>{l.qty}</span>
-                  <button onClick={() => update(l.key, { qty: l.qty + 1 })} aria-label="Aumentar">+</button>
-                </div>
-                <input
-                  style={{ gridColumn: '1 / -1', minHeight: 38 }}
-                  placeholder="Observação (ex.: sem cebola, bem passado)"
-                  value={l.notes}
-                  onChange={(e) => update(l.key, { notes: e.target.value })}
-                />
-              </div>
+              <CartLineRow key={l.key} line={l} quick={quick} onChange={(patch) => update(l.key, patch)} />
             ))}
           </div>
           <label className="field">Observação geral
@@ -248,11 +308,98 @@ function NewOrder({ onSent }: { onSent: () => void }) {
             <span className="muted">{mode === 'local' ? 'Comer aqui' : 'Para viagem'}</span>
             <strong className="money" style={{ fontSize: '1.3rem' }}>{brl(total)}</strong>
           </div>
-          {!identValue.trim() && <p className="error-text">Informe {identType === 'mesa' ? 'a mesa' : 'o nome do cliente'} antes de enviar.</p>}
-          <button className="btn-primary btn-lg btn-block" disabled={!identValue.trim()} onClick={send}>Enviar pedido</button>
+          <button className="btn-primary btn-lg btn-block" onClick={send}>Enviar pedido</button>
+          <p className="muted small center">{db.establishment.paymentTiming === 'antes' ? 'O pedido vai para a cozinha depois de pago no caixa.' : 'Vai direto para a cozinha.'}</p>
         </Modal>
       )}
     </>
+  )
+}
+
+/** Linha do pedido na revisão: quantidade, observações rápidas em botões e uma observação livre. */
+function CartLineRow({ line: l, quick, onChange }: { line: CartLine; quick: string[]; onChange: (patch: Partial<CartLine>) => void }) {
+  const chosen = splitNotes(l.notes)
+  const custom = chosen.filter((n) => !quick.some((qn) => qn.toLowerCase() === n.toLowerCase()))
+  const [free, setFree] = useState(custom.join(', '))
+  const [showFree, setShowFree] = useState(custom.length > 0)
+  const setFreeText = (text: string) => {
+    setFree(text)
+    const base = chosen.filter((n) => quick.some((qn) => qn.toLowerCase() === n.toLowerCase()))
+    onChange({ notes: [...base, ...splitNotes(text)].join(', ') })
+  }
+  return (
+    <div className="cart-line">
+      <div>
+        <strong>{l.product.name}</strong>
+        <div className="muted small money">{brl(l.product.price)} cada</div>
+      </div>
+      <div className="qty">
+        <button onClick={() => onChange({ qty: l.qty - 1 })} aria-label="Diminuir">−</button>
+        <span>{l.qty}</span>
+        <button onClick={() => onChange({ qty: l.qty + 1 })} aria-label="Aumentar">+</button>
+      </div>
+      <div className="note-chips">
+        {quick.map((n) => {
+          const on = chosen.some((c) => c.toLowerCase() === n.toLowerCase())
+          return <button key={n} type="button" className={on ? 'on' : ''} aria-pressed={on} onClick={() => onChange({ notes: toggleNote(l.notes, n) })}>{on ? '✓ ' : ''}{n}</button>
+        })}
+        <button type="button" className={showFree ? 'on' : ''} aria-pressed={showFree} onClick={() => setShowFree((v) => !v)}>✎ Outra</button>
+      </div>
+      {showFree && (
+        <input style={{ gridColumn: '1 / -1', minHeight: 44 }} placeholder="Outra observação (ex.: sem farofa)" aria-label={`Outra observação para ${l.product.name}`} value={free} onChange={(e) => setFreeText(e.target.value)} autoFocus />
+      )}
+    </div>
+  )
+}
+
+/** Mesas com conta aberta: total, tempo, adicionar itens e fechar a conta no caixa. */
+function OpenTables({ onAdd }: { onAdd: (p: Preset) => void }) {
+  const db = useDB()
+  const user = useCurrentUser()
+  const now = useNow()
+  const tables = openTables(db)
+  const mesas = Array.from({ length: db.establishment.tableCount }, (_, i) => String(i + 1))
+  const busy = new Set(tables.map((t) => t.table.toLowerCase()))
+  const free = mesas.filter((m) => !busy.has(m))
+  const [showFree, setShowFree] = useState(false)
+  return (
+    <main className="page">
+      <Segmented value={showFree ? 'livres' : 'abertas'} onChange={(v) => setShowFree(v === 'livres')} options={[
+        { value: 'abertas', label: `Abertas (${tables.length})` },
+        { value: 'livres', label: `Livres (${free.length})` },
+      ]} />
+      {!showFree && tables.length === 0 && <div className="card empty">Nenhuma mesa com conta aberta.</div>}
+      {!showFree && tables.map((t) => (
+        <section key={t.table} className="card stack">
+          <div className="row" style={{ flexWrap: 'nowrap' }}>
+            <span className="ident-pill" style={{ padding: 0, boxShadow: 'none', background: 'none' }}><span className="circle" aria-hidden>{t.table.slice(0, 3)}</span></span>
+            <div className="grow">
+              <div className="ident-name">Mesa {t.table}</div>
+              <div className="small muted" style={{ fontWeight: 700 }}>{t.orders.length} {t.orders.length === 1 ? 'pedido' : 'pedidos'} · aberta há {relativeAge(t.since, now)}</div>
+            </div>
+            <strong className="money" style={{ fontSize: '1.6rem' }}>{brl(t.remaining)}</strong>
+          </div>
+          <div className="stack" style={{ gap: 6, padding: '8px 12px', borderRadius: 'var(--radius)', background: 'var(--bg)' }}>
+            {t.orders.map((o) => (
+              <div key={o.id} className="row between" style={{ flexWrap: 'nowrap' }}>
+                <span className="small" style={{ fontWeight: 700 }}>nº {o.number} · {o.items.map((i) => `${i.qty}× ${i.name}`).join(', ')}</span>
+                <span className={`badge ${o.status}`}>{STATUS_LABEL[o.status]}</span>
+              </div>
+            ))}
+          </div>
+          <div className="row">
+            <button className="btn-primary grow" onClick={() => onAdd({ identType: 'mesa', identValue: t.table, mode: t.orders[0].mode })}>+ Adicionar itens</button>
+            {hasRole(user, 'caixa') && <Link to={`/caixa?mesa=${encodeURIComponent(t.table)}`} className="btn grow" style={{ background: 'var(--solid)', color: 'var(--on-solid)' }}>Fechar conta</Link>}
+          </div>
+        </section>
+      ))}
+      {showFree && (
+        <div className="table-circles">
+          {free.map((m) => <button key={m} onClick={() => onAdd({ identType: 'mesa', identValue: m, mode: 'local' })} aria-label={`Abrir mesa ${m}`}>{m}</button>)}
+          {free.length === 0 && <div className="card empty" style={{ gridColumn: '1 / -1' }}>Todas as mesas estão com conta aberta.</div>}
+        </div>
+      )}
+    </main>
   )
 }
 

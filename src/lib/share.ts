@@ -26,3 +26,9 @@ export function downloadFile(file: File): void {
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+/** Compartilha um texto: janela do celular ou, no computador, WhatsApp Web. */
+export async function shareText(text: string): Promise<void> {
+  const r = await shareContent({ title: 'RKFood', text })
+  if (r === 'sem-suporte') window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
+}

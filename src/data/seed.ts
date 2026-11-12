@@ -11,8 +11,8 @@ export function emptyDatabase(): Database {
   return {
     version: DB_VERSION,
     establishment: {
-      id: '', name: 'RKFood', slogan: '', logoUrl: null, coverUrl: null, brandColor: '#e4572e',
-      paymentTiming: 'depois', phone: '', address: '', pixKey: '', kitchenTargetMin: 15, tableCount: 10,
+      id: '', name: 'RKFood', slogan: '', logoUrl: null, coverUrl: null, brandColor: '#cf3f17',
+      paymentTiming: 'depois', phone: '', address: '', pixKey: '', kitchenTargetMin: 15, tableCount: 10, quickNotes: [],
     },
     users: [], categories: [], products: [], orders: [], payments: [], customers: [], settlements: [], audit: [],
     materials: [], recipes: [], devices: [],
@@ -82,12 +82,12 @@ export function seedDatabase(): Database {
       slogan: 'O melhor espetinho da cidade',
       logoUrl: null,
       coverUrl: null,
-      brandColor: '#e4572e',
+      brandColor: '#cf3f17',
       paymentTiming: 'depois',
       phone: '',
       address: '',
       pixKey: '',
-      kitchenTargetMin: 15, tableCount: 10,
+      kitchenTargetMin: 15, tableCount: 10, quickNotes: [],
     },
     users: [
       user('Dono', '1234', ['dono', 'gerente', 'caixa', 'atendente', 'cozinha']),
