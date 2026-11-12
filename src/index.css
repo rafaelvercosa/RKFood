@@ -432,3 +432,7 @@ table.list tr.group-row td { background: var(--bg); }
 .qty span { white-space: nowrap; }
 .pix-code > .grow { overflow: hidden; }
 .pix-code code { display: block; }
+.role-tile, .manual-card, .check-step, .role-row { text-decoration: none; color: inherit; }
+.segmented button { padding: 8px 10px; }
+.perm-table th, .perm-table td { padding: 8px 3px; font-size: 0.8125rem; }
+.perm-table th:first-child, .perm-table td:first-child { padding-left: 0; }

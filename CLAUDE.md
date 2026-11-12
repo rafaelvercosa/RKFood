@@ -6,8 +6,9 @@
 - **Converse em português do Brasil**, em linguagem simples. O Rafael não é programador profissional:
   explique os passos de painel (Supabase, Vercel, GitHub) clique a clique, faça uma pergunta de cada vez quando
   precisar de decisão e vá desenvolvendo aos poucos, conversando.
-- Commits em português, organizados por etapa. Trabalhe num branch e junte na `main` quando o Rafael aprovar.
-  A Vercel publica a partir da `main`.
+- Commits em português, organizados por etapa. Desde 12/11/2026 o Rafael pediu para **trabalhar direto na `main`**
+  (sem branch separado). A Vercel publica a partir da `main`, então cada commit precisa ficar funcionando e com os
+  testes passando. Mudança no banco (migração) só é aplicada no Supabase real com o aval do Rafael.
 
 ## Decisões já tomadas (não reabrir sem motivo)
 - **Stack:** React 19 + TypeScript + Vite (PWA), React Router, Vitest. Backend **Supabase** (projeto na região
@@ -32,8 +33,8 @@
 
 ## Estado atual
 - `main` contém a etapa 1 (telas e modo demonstração) e a etapa 2 (Supabase), além do roteiro.
-- Testes: `npm test` (12 testes de regras de negócio no modo demo) e `supabase/tests/run_local.sh`
-  (11 testes SQL: isolamento entre estabelecimentos, perfis, pedido, pagamento, fiado), todos passando num
+- Testes: `npm test` (45 testes de regras de negócio no modo demo, Pix e relatórios) e `supabase/tests/run_local.sh`
+  (21 testes SQL: isolamento entre estabelecimentos, perfis, pedido, pagamento, fiado, caixa), todos passando num
   Postgres local.
 - Projeto Supabase: `https://yyarqyuirwzlqhsurwmx.supabase.co`. A URL e a chave publishable ficam em
   `.env.local` (fora do git, já criado no computador do Rafael). A senha do banco já foi trocada e
@@ -46,7 +47,7 @@
   limite e recebimento parcial, relatório do dia, histórico e upload de foto. Tudo funcionou, inclusive o
   embed com FKs compostas, o filtro `.or(...)`, o Realtime com RLS e as políticas do Storage. O único bug
   encontrado foi um laço nas abas da Gerência (link relativo no React Router 7), já corrigido.
-- **Visual "placa de barraca" (02/11/2026)**: fontes Big Shoulders Display (números, preços, títulos) e
+- **(Substituído pela 0.3) Visual "placa de barraca" (02/11/2026)**: fontes Big Shoulders Display (números, preços, títulos) e
   Atkinson Hyperlegible (texto), embutidas via Fontsource; cores em `src/index.css` (fumaça, carvão, milho,
   lona azul, folha; `--brand` vem do estabelecimento); pedidos como comanda picotada (`.comanda`).
   Atendente com botões das mesas 1 a 10. Preview do modo demonstração: `rkfood-demo` (porta 5174, PIN 1234).
@@ -95,6 +96,33 @@
     verdade depois da Vercel (o link precisa de endereço público).
 - **Testes do banco no Windows sem Docker:** dá para rodar `supabase/tests` num Postgres em memória com o
   PGlite (`@electric-sql/pglite` + `pgcrypto`), tirando as linhas `\` do psql. 20 testes passando.
+
+- **Versão 0.3, visual "macia" (12/11/2026)**, implementada a partir dos mockups da Direção 2 (canvas de design do
+  Rafael; mockups e panfleto fora do repositório): fontes **Baloo 2** (títulos e números) e **Nunito** (texto);
+  botões em pílula, cartões de 28 px, sem "placa de barraca" nem comanda picotada. `--brand` vem do estabelecimento e
+  `--brand-ink` (texto branco ou escuro) é calculado por contraste em `src/lib/color.ts`; `--brand-soft` e `--brand-text`
+  vêm de `color-mix` no CSS. Tema claro, escuro e do sistema.
+- **O que a 0.3 trouxe** (testado no modo demonstração e com testes automáticos):
+  - Início por perfil (`Home.tsx`): resumo do dia só para o dono, atalhos com contagem, início do atendente
+    (novo pedido, prontos, meus pedidos) e lista guiada "Vamos deixar tudo pronto" para o dono.
+  - Atendente em 2 passos, observações rápidas (`quickNotes`, padrão em `src/lib/quickNotes.ts`), aba Mesas.
+  - Mesas abertas e **conta da mesa** (`openTables`, `splitEvenly`, `tablePay.ts`): sem tabela nova; cada pagamento é
+    repartido entre os pedidos da mesa e gravado com `pay_order` em cada pedido.
+  - **Pix com QR Code** (`src/lib/pix.ts`, `pages/caixa/PixSheet.tsx`): BR Code estático com valor, CRC16, chave de
+    `establishments.pix_key`; o caixa confirma à mão (o sistema não sabe se o Pix caiu). Falta validar o QR num app de banco real.
+  - **Caixa aberto/fechado** (`cash_sessions`, `open_cash`, `close_cash`, migração 14): esperado = troco + dinheiro
+    recebido desde a abertura; guarda contado e diferença; resumo para o WhatsApp. Não bloqueia receber com o caixa fechado.
+  - Cozinha: anel de cronômetro e barra "Na chapa" (`grillTotals`).
+  - Gerência: cardápio modelo (`lib/menuModels.ts`, `installMenuModel`), observações rápidas, cores da marca.
+  - Dono: vendas por hora, horário de pico e comparação com o período anterior (`reports.ts`).
+  - Desfazer por 8 s (`toastUndo`/`attemptUndo` em `ui.tsx`) ao tirar item do pedido e mandar algo para a lixeira.
+  - Faixa "Sem internet" (só no modo nuvem) e manual dentro do app (`src/manual/content.ts`, `pages/Manual.tsx`, botão ?).
+  - README com o manual de instruções (manter em sincronia com `src/manual/content.ts`).
+- **Migração 14** (`20261108000100_caixa_e_observacoes_rapidas.sql`): **ainda não aplicada no Supabase real** (conferir
+  com o Rafael). Enquanto isso o app tolera a falta: `cashEnabled` fica falso e esconde abrir/fechar caixa; salvar
+  observações rápidas mostra um aviso. Testes do banco: 21 passando (`supabase/tests/run_local.sh`).
+- Itens que ficaram de fora de propósito (roadmap): cardápio por QR Code para o cliente, modo contingência offline,
+  impressora Bluetooth, Pix dinâmico com confirmação automática.
 
 ## Próximos passos (nesta ordem)
 1. **Publicado na Vercel em 02/11/2026: https://rkfood.vercel.app** (projeto `rkfood`, conta Hobby do Rafael;

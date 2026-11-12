@@ -31,7 +31,7 @@ export default function Caixa() {
     <>
       <Header title="Caixa" right={<Link to="/fiado" className="btn btn-ghost btn-sm">📒<span className="header-label"> Fiado</span></Link>} />
       <main className="page">
-        {session ? (
+        {db.cashEnabled === false ? null : session ? (
           <div className="row between hint ok" style={{ flexWrap: 'nowrap' }}>
             <span>Caixa aberto desde {hhmm(session.openedAt)} · troco {brl(session.openingCents)}</span>
             {hasRole(user, 'caixa') && <button className="btn-sm" onClick={() => setClosing(true)}>Fechar</button>}
@@ -44,7 +44,7 @@ export default function Caixa() {
           </div>
         )}
         <Segmented full value={view} onChange={setView} options={[
-          { value: 'receber', label: 'A receber' },
+          { value: 'receber', label: 'Receber' },
           { value: 'mesas', label: `Mesas${tables.length ? ` (${tables.length})` : ''}` },
           { value: 'pagos', label: 'Pagos' },
           { value: 'fechamento', label: 'Fechamento' },

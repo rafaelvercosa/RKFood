@@ -60,7 +60,7 @@ export default function Cozinha() {
   return (
     <div className={prefs.tv ? 'tv' : ''}>
       <Header
-        title={`Cozinha · ${queue.length} na fila`}
+        title="Cozinha"
         right={<button className="btn-ghost btn-sm" onClick={() => setShowSettings((s) => !s)} aria-expanded={showSettings} aria-label="Ajustes">⚙︎<span className="header-label"> Ajustes</span></button>}
       />
       <main className="page" style={{ maxWidth: prefs.tv ? 'none' : undefined }}>

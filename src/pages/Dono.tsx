@@ -21,6 +21,7 @@ export default function Dono() {
     { to: 'ficha', label: 'Ficha técnica', el: <FichaTecnica /> },
     { to: 'materiais', label: 'Materiais', el: <Materiais /> },
     { to: 'aparelhos', label: 'Aparelhos', el: <Aparelhos /> },
+    { to: 'manual', label: 'Manual', el: <Navigate to="/manual" replace /> },
   ]
   return (
     <>

@@ -54,3 +54,12 @@ Cenário real: internet de 4G **oscilando** com frequência e, às vezes, **hora
 - Controle de saldo de estoque (lançar compras e ver quanto tem de cada material; avisar abaixo do mínimo)
 - Gráficos e exportação para planilha nos relatórios do dono
 - Fechar a conta da mesa juntando vários pedidos
+
+## Ideias para depois (apostas maiores)
+
+Ficaram de fora da versão 0.3 de propósito. Cada uma muda bastante a forma de usar o sistema.
+
+- **Cardápio por QR Code para o cliente:** o cliente lê o QR da mesa, vê o cardápio e pede sozinho. Exige uma área pública (sem PIN), proteção contra pedido falso e confirmação pelo atendente.
+- **Modo contingência offline:** fila de sincronização e servidor local na barraca (descrito acima).
+- **Impressora Bluetooth** para a comanda: hoje a impressão usa o diálogo do navegador (58 ou 80 mm).
+- **Pix dinâmico com confirmação automática:** hoje o QR Code é estático e o caixa confere no app do banco. A confirmação automática exige um provedor de pagamentos (taxas e cadastro).

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { OrderIdent, Segmented } from '../components/ui'
 import { logoutOperator as logout } from '../data/api'
+import { isCloud } from '../data/backend'
 import { dailySummary, isOrderPaid, modeLabel, orderRemaining, orderTotal } from '../data/selectors'
 import { hasRole, useCurrentUser } from '../data/session'
 import { useDB } from '../data/store'
@@ -178,7 +179,7 @@ export function useChecklist() {
   const steps = [
     { key: 'cardapio', label: 'Montar o cardápio', hint: 'Comece com um modelo de espetinho', to: '/gerente/modelo', done: db.products.some((p) => !p.deletedAt) },
     { key: 'equipe', label: 'Cadastrar a equipe', hint: 'Atendente, cozinha, caixa', to: '/gerente/equipe', done: staff.length > 1 },
-    { key: 'convite', label: 'Chamar a equipe pelo WhatsApp', hint: 'Cada um entra pelo próprio celular', to: '/gerente/equipe', done: db.devices.some((d) => d.kind === 'convite') || staff.some((u) => u.pinPending === false && u.createdBy) },
+    { key: 'convite', label: 'Chamar a equipe pelo WhatsApp', hint: 'Cada um entra pelo próprio celular', to: '/gerente/equipe', done: !isCloud || db.devices.some((d) => d.kind === 'convite') || staff.some((u) => !u.pinPending && u.createdBy) },
     { key: 'teste', label: 'Fazer um pedido de teste', hint: 'Do atendente até a cozinha', to: '/atendente', done: db.orders.length > 0 },
   ]
   return steps

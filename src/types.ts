@@ -246,4 +246,6 @@ export interface Database {
   recipes: RecipeItem[]
   devices: Device[]
   cashSessions: CashSession[]
+  /** Só na nuvem: o banco já tem o caixa (migração 14). Falso esconde abrir e fechar caixa. */
+  cashEnabled?: boolean
 }

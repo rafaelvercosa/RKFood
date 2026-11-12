@@ -111,8 +111,8 @@ function Perfis() {
       <Header title="Quem pode o quê" back backTo="/manual" />
       <main className="page" style={{ maxWidth: 640 }}>
         <section className="card" style={{ overflowX: 'auto' }}>
-          <table className="list">
-            <thead><tr><th>Ação</th>{PERMISSION_ROLES.map((r) => <th key={r} style={{ textAlign: 'center' }}>{ROLE_LABEL[r].slice(0, 5)}</th>)}</tr></thead>
+          <table className="list perm-table">
+            <thead><tr><th>Ação</th>{PERMISSION_ROLES.map((r) => <th key={r} style={{ textAlign: 'center' }}>{ROLE_LABEL[r].slice(0, 4)}</th>)}</tr></thead>
             <tbody>
               {PERMISSIONS.map(([action, ...flags]) => (
                 <tr key={action}>

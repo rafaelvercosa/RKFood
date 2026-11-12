@@ -65,6 +65,7 @@ export function establishmentId(): string {
 export function friendly(message: string): string {
   if (/failed to fetch|networkerror|load failed|fetch failed/i.test(message)) return 'Sem conexão com o servidor. Verifique a internet e tente de novo.'
   if (message === 'Invalid login credentials') return 'E-mail ou senha incorretos'
+  if (/could not find the function|schema cache/i.test(message)) return 'Esta função ainda não foi instalada no banco. Peça para aplicar a última atualização do banco de dados.'
   return message
 }
 
@@ -279,7 +280,7 @@ async function reload(eid: string): Promise<void> {
     all<Row>((a, b) => db.from('recipe_items').select('*').eq(E, eid).range(a, b)),
     all<Row>((a, b) => db.from('devices').select('*').eq(E, eid).order('last_seen_at', { ascending: false }).range(a, b)),
     // caixa (migração 14): se o banco ainda não tem a tabela, segue sem ela
-    db.from('cash_sessions').select('*').eq(E, eid).order('opened_at', { ascending: false }).limit(120).then((r) => (r.error ? [] : ((r.data ?? []) as Row[]))),
+    db.from('cash_sessions').select('*').eq(E, eid).order('opened_at', { ascending: false }).limit(120).then((r) => (r.error ? null : ((r.data ?? []) as Row[]))),
   ])
   if (est.error) throw new Error(est.error.message)
   if (audit.error) throw new Error(audit.error.message)
@@ -324,7 +325,7 @@ export async function fetchOrdersBetween(from: string, to: string): Promise<{ or
 
 function toDatabase(r: {
   est: Row; staff: Row[]; categories: Row[]; products: Row[]; customers: Row[]; settlements: Row[]; orders: Row[]; audit: Row[]
-  materials: Row[]; recipes: Row[]; devices: Row[]; cash: Row[]
+  materials: Row[]; recipes: Row[]; devices: Row[]; cash: Row[] | null
 }): Database {
   const establishment: Establishment = {
     id: r.est.id, name: r.est.name, slogan: r.est.slogan, logoUrl: r.est.logo_url, coverUrl: r.est.cover_url,
@@ -356,12 +357,12 @@ function toDatabase(r: {
     id: d.id, kind: d.kind, staffId: d.staff_id, info: d.info, firstSeenAt: d.first_seen_at, lastSeenAt: d.last_seen_at,
     lastStaffId: d.last_staff_id, blockedAt: d.blocked_at,
   }))
-  const cashSessions: CashSession[] = r.cash.map((c) => ({
+  const cashSessions: CashSession[] = (r.cash ?? []).map((c) => ({
     id: c.id, businessDate: c.business_date, openedAt: c.opened_at, openedBy: c.opened_by, openingCents: c.opening_cents,
     closedAt: c.closed_at, closedBy: c.closed_by, expectedCents: c.expected_cents, countedCents: c.counted_cents,
     differenceCents: c.difference_cents, note: c.note ?? '',
   }))
-  return { version: DB_VERSION, establishment, users, categories, products, orders, payments, customers, settlements, audit, materials, recipes, devices, cashSessions }
+  return { version: DB_VERSION, establishment, users, categories, products, orders, payments, customers, settlements, audit, materials, recipes, devices, cashSessions, cashEnabled: r.cash !== null }
 }
 
 function toOrders(rows: Row[]): { orders: Order[]; payments: Payment[] } {
