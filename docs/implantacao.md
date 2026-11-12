@@ -11,6 +11,10 @@ Passo a passo para colocar o RKFood no ar e cadastrar um estabelecimento cliente
    Assim só você cria contas. Os estabelecimentos não se cadastram sozinhos.
 
 > Para atualizar o banco no futuro, rode apenas os arquivos novos de `supabase/migrations/`.
+> A migração 14 (`20261108000100_caixa_e_observacoes_rapidas.sql`) traz abrir e fechar o caixa e as observações rápidas.
+
+**Pix com QR Code:** cadastre a chave Pix em Gerência → Estabelecimento (CPF, CNPJ, telefone, e-mail ou chave aleatória).
+O QR Code é estático com o valor do pedido; o caixa confere no app do banco e confirma. Teste uma vez com o app do seu banco antes de usar de verdade.
 
 ## 2. Cadastrar um estabelecimento cliente
 

@@ -118,9 +118,10 @@
   - Desfazer por 8 s (`toastUndo`/`attemptUndo` em `ui.tsx`) ao tirar item do pedido e mandar algo para a lixeira.
   - Faixa "Sem internet" (só no modo nuvem) e manual dentro do app (`src/manual/content.ts`, `pages/Manual.tsx`, botão ?).
   - README com o manual de instruções (manter em sincronia com `src/manual/content.ts`).
-- **Migração 14** (`20261108000100_caixa_e_observacoes_rapidas.sql`): **ainda não aplicada no Supabase real** (conferir
-  com o Rafael). Enquanto isso o app tolera a falta: `cashEnabled` fica falso e esconde abrir/fechar caixa; salvar
-  observações rápidas mostra um aviso. Testes do banco: 21 passando (`supabase/tests/run_local.sh`).
+- **Migração 14** (`20261108000100_caixa_e_observacoes_rapidas.sql`): **aplicada no Supabase real em 12/11/2026**
+  (pelo MCP, com o aval do Rafael; conferidos a tabela `cash_sessions`, a coluna `quick_notes`, as 3 funções e o RLS).
+  Ainda **não testada na nuvem com aparelho de verdade** (abrir/fechar caixa e salvar observações). O app tolera banco
+  sem a migração (`cashEnabled` falso esconde abrir/fechar caixa). Testes do banco: 21 passando (`supabase/tests/run_local.sh`).
 - Itens que ficaram de fora de propósito (roadmap): cardápio por QR Code para o cliente, modo contingência offline,
   impressora Bluetooth, Pix dinâmico com confirmação automática.
 
