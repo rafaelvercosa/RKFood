@@ -90,11 +90,12 @@ export function DailyReport({ date }: { date: string }) {
   )
 }
 
-export function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+export function Stat({ label, value, hint, note }: { label: string; value: string; hint?: string; note?: string }) {
   return (
     <div className="stat" title={hint}>
       <div className="label">{label}</div>
       <div className="value">{value}</div>
+      {note && <div className="small muted" style={{ fontWeight: 700, marginTop: 2 }}>{note}</div>}
     </div>
   )
 }

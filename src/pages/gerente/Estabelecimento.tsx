@@ -4,7 +4,16 @@ import { saveEstablishment, uploadImage } from '../../data/api'
 import { hasRole, useCurrentUser } from '../../data/session'
 import { useDB } from '../../data/store'
 import { resizeImage } from '../../lib/image'
+import { contrast, inkOn } from '../../lib/color'
 import type { Establishment } from '../../types'
+
+const BRAND_SWATCHES = [
+  { name: 'Brasa', color: '#cf3f17' },
+  { name: 'Folha', color: '#1e7a46' },
+  { name: 'Lona azul', color: '#2a62c4' },
+  { name: 'Milho', color: '#ffc53d' },
+  { name: 'Carvão', color: '#2a2420' },
+]
 
 export default function EstabelecimentoForm() {
   const db = useDB()
@@ -45,9 +54,20 @@ export default function EstabelecimentoForm() {
         </div>
         <label className="field">Nome *<input value={form.name} onChange={(e) => set({ name: e.target.value })} /></label>
         <label className="field">Frase de apresentação<input value={form.slogan} onChange={(e) => set({ slogan: e.target.value })} /></label>
-        <label className="field" style={{ maxWidth: 200 }}>Cor da marca
-          <input type="color" value={form.brandColor} onChange={(e) => set({ brandColor: e.target.value })} style={{ padding: 4 }} />
-        </label>
+        <div className="stack" style={{ gap: 8 }}>
+          <span className="small" style={{ fontWeight: 800 }}>Cor da marca</span>
+          <div className="row" role="group" aria-label="Escolher a cor da marca">
+            {BRAND_SWATCHES.map((c) => (
+              <button key={c.color} type="button" aria-pressed={form.brandColor.toLowerCase() === c.color} aria-label={c.name} title={c.name}
+                onClick={() => set({ brandColor: c.color })}
+                style={{ width: 48, height: 48, minHeight: 48, padding: 0, borderRadius: '50%', background: c.color, color: inkOn(c.color), boxShadow: form.brandColor.toLowerCase() === c.color ? `0 0 0 3px var(--surface), 0 0 0 6px ${c.color}` : 'var(--shadow-1)' }}>
+                {form.brandColor.toLowerCase() === c.color ? '✓' : ''}
+              </button>
+            ))}
+            <label className="btn btn-sm" style={{ minHeight: 48 }}>Outra cor<input type="color" value={form.brandColor} onChange={(e) => set({ brandColor: e.target.value })} style={{ width: 40, minHeight: 32, padding: 2, marginLeft: 6 }} aria-label="Escolher outra cor" /></label>
+          </div>
+          <p className="small muted">O texto sobre a cor muda sozinho para {inkOn(form.brandColor) === '#ffffff' ? 'branco' : 'escuro'}, para continuar fácil de ler{contrast(form.brandColor, inkOn(form.brandColor)) < 4.5 ? '. Essa cor ficou clara ou apagada: prefira um dos tons acima.' : '.'}</p>
+        </div>
       </fieldset>
 
       <div className="card stack">
@@ -92,7 +112,7 @@ export default function EstabelecimentoForm() {
         <h3>Contato e Pix</h3>
         <label className="field">Telefone / WhatsApp<input inputMode="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} /></label>
         <label className="field">Endereço<input value={form.address} onChange={(e) => set({ address: e.target.value })} /></label>
-        <label className="field">Chave Pix (aparece no extrato do fiado)<input value={form.pixKey} onChange={(e) => set({ pixKey: e.target.value })} /></label>
+        <label className="field">Chave Pix (QR Code do caixa e extrato do fiado)<input value={form.pixKey} onChange={(e) => set({ pixKey: e.target.value })} /></label>
       </div>
 
       <button className="btn-primary btn-lg" onClick={() => attempt(() => saveEstablishment(form), 'Dados salvos')}>Salvar</button>

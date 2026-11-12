@@ -10,6 +10,7 @@ import { isCloud, sb } from './backend'
 import { establishmentId, fetchOrdersBetween, friendly, scheduleReload, withTimeout } from './cloud'
 import { deviceInfo, deviceKey } from '../lib/device'
 import { clearOperator, currentUserId, operatorToken, setOperator } from './session'
+import type { MenuModel } from '../lib/menuModels'
 import { planTablePayments } from './tablePay'
 import { getDB } from './store'
 
@@ -290,4 +291,36 @@ export async function saveQuickNotes(notes: string[]): Promise<void> {
 export async function payTable(orders: Order[], payments: PaymentInput[], authPin = ''): Promise<void> {
   const plan = planTablePayments(getDB(), orders, payments)
   for (const step of plan) await payOrder(step.orderId, step.payments, authPin)
+}
+
+/** Espera um dado aparecer na "foto" local (na nuvem ela é recarregada depois de cada gravação). */
+async function waitFor<T>(find: () => T | undefined, ms = 10000): Promise<T> {
+  const t0 = Date.now()
+  for (;;) {
+    const v = find()
+    if (v !== undefined) return v
+    if (Date.now() - t0 > ms) throw new Error('A conexão está lenta. Tente de novo em instantes.')
+    await new Promise((r) => setTimeout(r, 150))
+  }
+}
+
+/**
+ * Cria as categorias e os itens de um cardápio modelo (gerente ou dono).
+ * Categoria que já existe com o mesmo nome é reaproveitada, e item com o mesmo nome não é repetido.
+ * Devolve quantos itens foram criados.
+ */
+export async function installMenuModel(model: MenuModel): Promise<number> {
+  let created = 0
+  for (const cat of model.categories) {
+    const find = () => getDB().categories.find((c) => !c.deletedAt && c.name.trim().toLowerCase() === cat.name.toLowerCase())
+    if (!find()) await saveCategory({ name: cat.name })
+    const id = (await waitFor(find)).id
+    for (const item of cat.items) {
+      const exists = getDB().products.some((p) => !p.deletedAt && p.categoryId === id && p.name.trim().toLowerCase() === item.name.toLowerCase())
+      if (exists) continue
+      await saveProduct({ categoryId: id, name: item.name, description: '', price: item.price, photoUrl: null, active: true, sendToKitchen: item.sendToKitchen ?? true })
+      created++
+    }
+  }
+  return created
 }

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { consumption, periodReport, periodText, productCost } from '../../data/reports'
+import { consumption, hourlySales, peakHour, percentChange, periodReport, periodText, previousPeriod, productCost } from '../../data/reports'
 import { useDB } from '../../data/store'
 import { businessDateBR } from '../../lib/dates'
 import { brl } from '../../lib/money'
@@ -15,12 +15,18 @@ export default function Vendas({ period, onPeriod }: { period: Period; onPeriod:
   const db = useDB()
   const { from, to } = period
   const data = usePeriodOrders(from, to)
+  const prevRange = useMemo(() => previousPeriod(from <= to ? from : to, from <= to ? to : from), [from, to])
+  const prev = usePeriodOrders(prevRange.from, prevRange.to)
   const r = useMemo(() => periodReport(db, data.orders, data.payments, from, to), [db, data.orders, data.payments, from, to])
   const c = useMemo(() => consumption(db, r.products), [db, r.products])
   // lucro estimado: o que entrou (sem cortesia) menos o custo dos materiais pela ficha técnica
   const revenue = r.sales - r.byMethod.cortesia
   const profit = revenue - c.totalCost
   const categories = [...new Set(r.products.map((p) => p.category))]
+  const prevSales = useMemo(() => periodReport(db, prev.orders, prev.payments, prevRange.from, prevRange.to).sales, [db, prev.orders, prev.payments, prevRange])
+  const change = prev.loading ? null : percentChange(r.sales, prevSales)
+  const hours = useMemo(() => hourlySales(data.orders, from, to), [data.orders, from, to])
+  const peak = peakHour(hours)
 
   function print() {
     const rows = r.products.map((p) => `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.category)}</td><td class="right">${p.qty}</td><td class="right">${brl(p.revenue)}</td></tr>`).join('')
@@ -46,7 +52,7 @@ export default function Vendas({ period, onPeriod }: { period: Period; onPeriod:
       {data.loading ? <div className="card empty">Carregando os pedidos do período…</div> : (
         <>
           <div className="stat-grid">
-            <Stat label="Vendas" value={brl(r.sales)} hint="Soma dos pedidos não cancelados" />
+            <Stat label="Vendas" value={brl(r.sales)} hint="Soma dos pedidos não cancelados" note={change === null ? undefined : `${change >= 0 ? '↑' : '↓'} ${Math.abs(change)}% contra o período anterior (${brl(prevSales)})`} />
             <Stat label="Pedidos" value={String(r.orderCount)} />
             <Stat label="Ticket médio" value={brl(r.averageTicket)} />
             <Stat label="Custo estimado" value={brl(c.totalCost)} hint="Materiais gastos, pela ficha técnica" />
@@ -57,6 +63,8 @@ export default function Vendas({ period, onPeriod }: { period: Period; onPeriod:
               ⚠ Sem ficha técnica, fora do custo: <b>{c.withoutRecipe.join(', ')}</b>. Cadastre na aba Ficha técnica para o custo e o lucro ficarem certos.
             </p>
           )}
+
+          {peak && <HoursChart hours={hours} peakHour={peak.hour} />}
 
           <div className="card">
             <div className="row between"><h3>Itens vendidos</h3><button className="btn-sm" onClick={print}>🖨️ Imprimir</button></div>
@@ -107,6 +115,31 @@ export default function Vendas({ period, onPeriod }: { period: Period; onPeriod:
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+/** Vendas por hora: a hora de maior venda fica destacada. Só mostra as horas com movimento. */
+function HoursChart({ hours, peakHour: peak }: { hours: { hour: number; sales: number }[]; peakHour: number }) {
+  const active = hours.filter((h) => h.sales > 0)
+  const first = Math.max(0, Math.min(...active.map((h) => h.hour)) - 1)
+  const last = Math.min(23, Math.max(...active.map((h) => h.hour)) + 1)
+  const shown = hours.filter((h) => h.hour >= first && h.hour <= last)
+  const max = Math.max(...shown.map((h) => h.sales), 1)
+  const top = hours.find((h) => h.hour === peak)!
+  return (
+    <div className="card stack">
+      <h3>Vendas por hora</h3>
+      <div className="bar-chart" role="img" aria-label={`Horário de pico: ${peak}h, ${brl(top.sales)}`}>
+        {shown.map((h) => (
+          <div key={h.hour} className={`bar ${h.hour === peak ? 'peak' : ''}`}>
+            {h.hour === peak && <span>{brl(h.sales)}</span>}
+            <i style={{ height: `${Math.max(4, (h.sales / max) * 100)}%` }} />
+            <span>{h.hour}h</span>
+          </div>
+        ))}
+      </div>
+      <p className="hint">Pico às {peak}h: reforce a chapa e o atendimento nesse horário.</p>
     </div>
   )
 }

@@ -274,3 +274,50 @@ export function formatDuration(seconds: number): string {
   if (m >= 60) return `${Math.floor(m / 60)} h ${m % 60} min`
   return s ? `${m} min ${s} s` : `${m} min`
 }
+
+// ---------------------------------------------------------------- horário de pico e comparação
+
+/** Dias entre duas datas AAAA-MM-DD, contando as duas pontas. */
+function daysInclusive(from: string, to: string): number {
+  const a = new Date(`${from}T12:00:00`)
+  const b = new Date(`${to}T12:00:00`)
+  return Math.round((b.getTime() - a.getTime()) / 86400000) + 1
+}
+
+function shiftDate(day: string, delta: number): string {
+  const d = new Date(`${day}T12:00:00`)
+  d.setDate(d.getDate() + delta)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** O período de mesmo tamanho logo antes deste (para comparar: 7 dias contra os 7 anteriores). */
+export function previousPeriod(from: string, to: string): { from: string; to: string } {
+  const n = daysInclusive(from, to)
+  return { from: shiftDate(from, -n), to: shiftDate(from, -1) }
+}
+
+/** Variação em % de `current` contra `previous`; null quando não há base para comparar. */
+export function percentChange(current: number, previous: number): number | null {
+  if (previous <= 0) return null
+  return Math.round(((current - previous) / previous) * 100)
+}
+
+export interface HourSales { hour: number; orders: number; sales: number }
+
+/** Vendas por hora do dia (0 a 23), somando todos os dias do período. Pedidos cancelados não entram. */
+export function hourlySales(orders: Order[], from: string, to: string): HourSales[] {
+  const hours: HourSales[] = Array.from({ length: 24 }, (_, hour) => ({ hour, orders: 0, sales: 0 }))
+  for (const o of orders) {
+    if (o.status === 'cancelado' || o.businessDate < from || o.businessDate > to) continue
+    const h = new Date(o.createdAt).getHours()
+    hours[h].orders += 1
+    hours[h].sales += orderTotal(o)
+  }
+  return hours
+}
+
+/** A hora que mais vendeu (null se não houve venda). */
+export function peakHour(hours: HourSales[]): HourSales | null {
+  const top = [...hours].sort((a, b) => b.sales - a.sales || a.hour - b.hour)[0]
+  return top && top.sales > 0 ? top : null
+}

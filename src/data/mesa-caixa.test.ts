@@ -134,3 +134,28 @@ describe('observações rápidas', () => {
     expect(getDB().establishment.quickNotes).toEqual([])
   })
 })
+
+describe('horário de pico e comparação', () => {
+  it('período anterior com o mesmo tamanho e variação em %', async () => {
+    const { previousPeriod, percentChange } = await import('./reports')
+    expect(previousPeriod('2026-11-05', '2026-11-11')).toEqual({ from: '2026-10-29', to: '2026-11-04' })
+    expect(previousPeriod('2026-11-11', '2026-11-11')).toEqual({ from: '2026-11-10', to: '2026-11-10' })
+    expect(previousPeriod('2026-03-01', '2026-03-31')).toEqual({ from: '2026-01-29', to: '2026-02-28' })
+    expect(percentChange(2386, 2130)).toBe(12)
+    expect(percentChange(50, 100)).toBe(-50)
+    expect(percentChange(100, 0)).toBeNull()
+  })
+
+  it('soma as vendas por hora e acha o pico', async () => {
+    const { hourlySales, peakHour } = await import('./reports')
+    const { owner, carne } = setup()
+    for (const q of [1, 3]) actions.createOrder(owner.id, { identType: 'mesa', identValue: '1', mode: 'local', notes: '', items: [line(carne, q)] })
+    const orders = getDB().orders.map((o) => ({ ...o, createdAt: new Date(2026, 10, 11, o.number === 1 ? 19 : 20, 15).toISOString(), businessDate: '2026-11-11' }))
+    orders.push({ ...orders[0], id: 'x', number: 3, status: 'cancelado', items: [line(carne, 9) as never] })
+    const hours = hourlySales(orders, '2026-11-11', '2026-11-11')
+    expect(hours[19].sales).toBe(carne.price)
+    expect(hours[20].sales).toBe(carne.price * 3)
+    expect(peakHour(hours)?.hour).toBe(20)
+    expect(peakHour(hourlySales([], '2026-11-11', '2026-11-11'))).toBeNull()
+  })
+})

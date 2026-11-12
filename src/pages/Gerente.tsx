@@ -4,6 +4,8 @@ import Cardapio from './gerente/Cardapio'
 import Equipe from './gerente/Equipe'
 import EstabelecimentoForm from './gerente/Estabelecimento'
 import Relatorios from './gerente/Relatorios'
+import Modelo from './gerente/Modelo'
+import ObservacoesRapidas from './gerente/ObservacoesRapidas'
 import Seguranca from './gerente/Seguranca'
 
 const TABS = [
@@ -11,8 +13,11 @@ const TABS = [
   { to: 'relatorios', label: 'Relatórios', el: <Relatorios /> },
   { to: 'equipe', label: 'Equipe', el: <Equipe /> },
   { to: 'estabelecimento', label: 'Estabelecimento', el: <EstabelecimentoForm /> },
+  { to: 'observacoes', label: 'Observações rápidas', el: <ObservacoesRapidas /> },
   { to: 'seguranca', label: 'Lixeira e histórico', el: <Seguranca /> },
 ]
+/** Páginas sem aba (abertas por atalhos). */
+const EXTRA = [{ to: 'modelo', el: <Modelo /> }]
 
 export default function Gerente() {
   return (
@@ -25,7 +30,7 @@ export default function Gerente() {
           ))}
         </nav>
         <Routes>
-          {TABS.map((t) => <Route key={t.to} path={t.to} element={t.el} />)}
+          {[...TABS, ...EXTRA].map((t) => <Route key={t.to} path={t.to} element={t.el} />)}
           {/* caminhos absolutos: no React Router 7, link relativo dentro de /gerente/* parte da URL inteira */}
           <Route path="*" element={<Navigate to="/gerente/cardapio" replace />} />
         </Routes>

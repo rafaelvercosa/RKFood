@@ -411,7 +411,7 @@ table.list tr.group-row td { background: var(--bg); }
 .check-step.next .n { background: var(--brand-soft); color: var(--brand-text); }
 .check-step.done strong { text-decoration: line-through; color: var(--muted); }
 .bar-chart { display: flex; align-items: flex-end; gap: 6px; height: 140px; padding-top: 18px; }
-.bar-chart .bar { flex: 1; min-width: 0; display: grid; align-content: end; justify-items: center; gap: 4px; height: 100%; font-size: 0.75rem; font-weight: 800; color: var(--muted); }
+.bar-chart .bar { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; height: 100%; white-space: nowrap; font-size: 0.75rem; font-weight: 800; color: var(--muted); }
 .bar-chart .bar i { display: block; width: 100%; max-width: 34px; border-radius: 10px 10px 4px 4px; background: var(--brand-soft); }
 .bar-chart .bar.peak i { background: var(--brand); }
 .bar-chart .bar.peak { color: var(--ink); }

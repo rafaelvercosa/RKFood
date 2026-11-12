@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { attempt, Modal, Photo } from '../../components/ui'
-import { moveCategory, moveToTrash, saveCategory, saveProduct, uploadImage, type ProductInput } from '../../data/api'
+import { Link } from 'react-router-dom'
+import { attempt, attemptUndo, Modal, Photo } from '../../components/ui'
+import { moveCategory, moveToTrash, restoreFromTrash, saveCategory, saveProduct, uploadImage, type ProductInput } from '../../data/api'
 import { useDB } from '../../data/store'
 import { resizeImage } from '../../lib/image'
 import { brl, centsToInput, parseBRL } from '../../lib/money'
@@ -18,7 +19,12 @@ export default function Cardapio() {
         <button className="btn-primary" onClick={() => setEditing('novo')} disabled={categories.length === 0}>+ Novo item</button>
         <button onClick={() => setEditingCat('nova')}>+ Nova categoria</button>
       </div>
-      {categories.length === 0 && <div className="card empty">Comece criando uma categoria (ex.: Espetinhos, Bebidas).</div>}
+      {categories.length === 0 && (
+        <div className="card stack center">
+          <p className="muted" style={{ fontWeight: 700 }}>Comece criando uma categoria (ex.: Espetinhos, Bebidas) ou use um cardápio modelo.</p>
+          <Link to="/gerente/modelo" className="btn btn-primary">Usar um cardápio modelo</Link>
+        </div>
+      )}
       {categories.map((c, ci) => {
         const items = db.products.filter((p) => p.categoryId === c.id && !p.deletedAt)
         return (
@@ -31,7 +37,7 @@ export default function Cardapio() {
                 <button className="btn-sm" onClick={() => setEditingCat(c)}>Renomear</button>
                 <button className="btn-sm btn-danger" onClick={() => {
                   if (items.length) return attempt(() => { throw new Error('Mova ou exclua os itens desta categoria antes') })
-                  attempt(() => moveToTrash('categories', c.id), 'Categoria movida para a lixeira')
+                  attemptUndo(() => moveToTrash('categories', c.id), 'Categoria movida para a lixeira', () => restoreFromTrash('categories', c.id))
                 }}>Excluir</button>
               </div>
             </div>
@@ -116,7 +122,7 @@ function ProductForm({ product, categories, onClose }: { product: Product | null
       <label className="check"><input type="checkbox" checked={form.sendToKitchen} onChange={(e) => set({ sendToKitchen: e.target.checked })} /> Passa pela cozinha (desmarque para bebidas prontas)</label>
       <button className="btn-primary btn-lg" onClick={save} disabled={loadingPhoto}>Salvar</button>
       {product && (
-        <button className="btn-danger" onClick={() => attempt(() => moveToTrash('products', product.id), 'Item movido para a lixeira').then((ok) => ok && onClose())}>
+        <button className="btn-danger" onClick={() => attemptUndo(() => moveToTrash('products', product.id), 'Item movido para a lixeira', () => restoreFromTrash('products', product.id)).then((ok) => ok && onClose())}>
           Excluir item
         </button>
       )}

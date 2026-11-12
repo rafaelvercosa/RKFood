@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { attempt, Modal, Segmented } from '../../components/ui'
+import { attempt, attemptUndo, Modal, Segmented } from '../../components/ui'
 import { saveMaterial, setMaterialTrashed, type MaterialInput } from '../../data/api'
 import { useDB } from '../../data/store'
 import { brl, centsToInput, parseBRL } from '../../lib/money'
@@ -68,7 +68,7 @@ function MaterialForm({ material, onClose }: { material: Material | null; onClos
       </label>
       <button className="btn-primary btn-lg" onClick={() => attempt(() => saveMaterial(input), 'Material salvo').then((ok) => ok && onClose())}>Salvar</button>
       {material && (
-        <button className="btn-danger" onClick={() => attempt(() => setMaterialTrashed(material.id, true), 'Material movido para a lixeira').then((ok) => ok && onClose())}>
+        <button className="btn-danger" onClick={() => attemptUndo(() => setMaterialTrashed(material.id, true), 'Material movido para a lixeira', () => setMaterialTrashed(material.id, false)).then((ok) => ok && onClose())}>
           Excluir material
         </button>
       )}

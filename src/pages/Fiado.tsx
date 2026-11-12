@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CustomerForm } from '../components/CustomerForm'
 import { Header } from '../components/Layout'
-import { attempt, Modal, Segmented } from '../components/ui'
-import { moveToTrash, receiveFiado } from '../data/api'
+import { attempt, attemptUndo, Modal, Segmented } from '../components/ui'
+import { moveToTrash, receiveFiado, restoreFromTrash } from '../data/api'
 import { customerBalance, customersWithBalance, customerStatement, type StatementLine } from '../data/selectors'
 import { useDB } from '../data/store'
 import { dateBR, dateTimeBR, hhmm, nowIso } from '../lib/dates'
@@ -131,7 +131,7 @@ export function ClienteFiado() {
         </div>
 
         {balance === 0 && !customer.deletedAt && (
-          <button className="btn-danger btn-sm" style={{ justifySelf: 'start' }} onClick={() => attempt(() => moveToTrash('customers', customer.id), 'Cliente movido para a lixeira')}>
+          <button className="btn-danger btn-sm" style={{ justifySelf: 'start' }} onClick={() => attemptUndo(() => moveToTrash('customers', customer.id), 'Cliente movido para a lixeira', () => restoreFromTrash('customers', customer.id))}>
             Excluir cliente
           </button>
         )}

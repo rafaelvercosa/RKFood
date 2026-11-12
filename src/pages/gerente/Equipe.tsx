@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { attempt, Modal, toast } from '../../components/ui'
-import { createInvite, moveToTrash, saveUser, setUserBlocked, type UserInput } from '../../data/api'
+import { attempt, attemptUndo, Modal, toast } from '../../components/ui'
+import { createInvite, moveToTrash, restoreFromTrash, saveUser, setUserBlocked, type UserInput } from '../../data/api'
 import { isCloud } from '../../data/backend'
 import { hasRole, useCurrentUser } from '../../data/session'
 import { useDB } from '../../data/store'
@@ -136,7 +136,7 @@ function UserForm({ user, isOwner, onClose }: { user: User | null; isOwner: bool
           <button className="grow" onClick={() => attempt(() => setUserBlocked(user.id, !blocked), blocked ? 'Usuário desbloqueado' : 'Usuário bloqueado').then((ok) => ok && onClose())}>
             {blocked ? '🔓 Desbloquear' : '🔒 Bloquear acesso'}
           </button>
-          <button className="btn-danger grow" onClick={() => attempt(() => moveToTrash('users', user.id), 'Usuário movido para a lixeira').then((ok) => ok && onClose())}>
+          <button className="btn-danger grow" onClick={() => attemptUndo(() => moveToTrash('users', user.id), 'Usuário movido para a lixeira', () => restoreFromTrash('users', user.id)).then((ok) => ok && onClose())}>
             Excluir usuário
           </button>
         </div>
